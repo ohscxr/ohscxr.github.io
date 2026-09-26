@@ -140,6 +140,16 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 #w98logon label{font-size:12px;display:block;margin-top:6px;}
 #w98logon input{width:100%;box-sizing:border-box;border:2px inset #808080;padding:4px;font-family:Tahoma;}
 #w98logon .row{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+
+#desktop{display:none;position:fixed;inset:0;z-index:5;background:#008080;font-family:Tahoma,Arial,sans-serif;}
+#desktop .icons{padding:12px;display:flex;flex-direction:column;align-items:flex-start;gap:14px;}
+#desktop .ico{width:76px;text-align:center;color:#fff;font-size:11px;text-shadow:1px 1px #000;cursor:pointer;user-select:none;}
+#desktop .ico .pic{width:36px;height:36px;margin:0 auto 4px;font-size:28px;line-height:36px;filter:drop-shadow(1px 1px 0 #000);}
+#desktop .ico.sel{outline:1px dotted #fff;}
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:28px;background:#c0c0c0;border-top:2px solid #fff;display:flex;align-items:center;padding:0 4px;gap:6px;}
+#taskbar .start{background:#c0c0c0;border:2px solid #fff;border-right-color:#404040;border-bottom-color:#404040;font-weight:bold;font-size:12px;padding:1px 8px;cursor:pointer;}
+#taskbar .clk{margin-left:auto;border:2px inset #808080;font-size:11px;padding:1px 8px;}
+.win#aimWin{display:none;z-index:10;position:relative;}
 ::-webkit-scrollbar{width:14px;}
 ::-webkit-scrollbar-track{background:#ddd;}
 ::-webkit-scrollbar-thumb{background:var(--win);border:2px outset #fff;}
@@ -177,7 +187,16 @@ Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
     </div>
   </div>
 </div>
-<div class="win">
+<div id="desktop">
+  <div class="icons">
+    <div class="ico" id="icoMyComp"><div class="pic">💻</div>My Computer</div>
+    <div class="ico" id="icoAim"><div class="pic">💬</div>AOL Instant<br>Messenger</div>
+    <div class="ico" id="icoRecycle"><div class="pic">🗑️</div>Recycle Bin</div>
+    <div class="ico" id="icoIe"><div class="pic">🌐</div>Internet<br>Explorer</div>
+  </div>
+  <div id="taskbar"><div class="start">Start</div><span style="font-size:11px;color:#000;">Welcome</span><span class="clk" id="deskClock"></span></div>
+</div>
+<div class="win" id="aimWin">
   <div class="titlebar"><span class="ic">💻</span><span id="titleText">mIRC32 - [#0p72-1rc]</span><span class="btns"><span id="minBtn">_</span><span id="maxBtn">▢</span><span id="logoutBtn" title="Sign Off">✕</span></span></div>
   <div class="menubar"><span>File</span><span>Tools</span><span>DCC</span><span>Commands</span><span>Window</span><span>Help</span></div>
   <div class="toolbar">
@@ -855,6 +874,7 @@ function ensureRickAudio(){
 let limeWin=null;
 function startPirate(){
   try{ addSys('LOL LIMEWIRE'); }catch(e){}
+  try{
   if(limeWin && document.body.contains(limeWin)){
     limeWin.style.zIndex=2147483646;
     const a=document.getElementById('limeSound');
@@ -878,6 +898,7 @@ function startPirate(){
     if(a){ try{ a.pause(); a.currentTime=0; }catch(e){} }
   };
   w.querySelector('.x').addEventListener('click', ev=>{ ev.stopPropagation(); stop(); });
+  }catch(err){ try{ addSys('pirate popup failed'); }catch(e){} }
 }
 
 async function win95CrashRelog(){
@@ -1243,11 +1264,8 @@ function finishW98Logon(asNew){
     if(pv) pv.style.background=col;
   }
   document.getElementById('w98logon').style.display='none';
-  document.getElementById('signon').style.display='block';
-  if(name && !asNew){
-    // stay on mIRC connect so they can hit Connect / dialup
-    document.getElementById('nickInput').focus();
-  }
+  document.getElementById('desktop').style.display='block';
+  tickDeskClock();
 }
 document.getElementById('w98ok').addEventListener('click', ()=>finishW98Logon(false));
 document.getElementById('w98new').addEventListener('click', ()=>{
@@ -1255,6 +1273,34 @@ document.getElementById('w98new').addEventListener('click', ()=>{
   document.getElementById('w98user').focus();
 });
 document.getElementById('w98user').addEventListener('keydown', e=>{ if(e.key==='Enter') finishW98Logon(false); });
+function tickDeskClock(){
+  const el=document.getElementById('deskClock');
+  if(!el) return;
+  const t=()=>{ el.textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+  t(); setInterval(t,15000);
+}
+function openAIM(){
+  const w=document.getElementById('aimWin');
+  if(w) w.style.display='flex';
+  const s=document.getElementById('signon');
+  if(s) s.style.display='block';
+  const ni=document.getElementById('nickInput');
+  if(ni) ni.focus();
+}
+let aimClicks=0, aimTimer=null;
+document.getElementById('icoAim').addEventListener('click', ()=>{
+  document.querySelectorAll('#desktop .ico').forEach(x=>x.classList.remove('sel'));
+  document.getElementById('icoAim').classList.add('sel');
+  aimClicks++;
+  clearTimeout(aimTimer);
+  if(aimClicks>=2){ aimClicks=0; openAIM(); }
+  else aimTimer=setTimeout(()=>{aimClicks=0;},400);
+});
+document.getElementById('icoAim').addEventListener('dblclick', ev=>{ ev.preventDefault(); openAIM(); });
+document.getElementById('icoMyComp').addEventListener('dblclick', ()=>alert('My Computer\n(C:)\n(D:) CD-ROM'));
+document.getElementById('icoIe').addEventListener('dblclick', ()=>alert('Internet Explorer\nCannot find server.'));
+document.getElementById('icoRecycle').addEventListener('dblclick', ()=>alert('Recycle Bin is empty.'));
+
 runWin98Boot();
 
 document.getElementById('enterBtn').addEventListener('click', enterRoom);
@@ -1395,7 +1441,9 @@ function signOff(){
   document.getElementById('inputRow').style.display='none';
   document.getElementById('statusBar').style.display='none';
   document.getElementById('dialOverlay').style.display='none';
-  document.getElementById('signon').style.display='block';
+  document.getElementById('aimWin').style.display='none';
+  document.getElementById('desktop').style.display='block';
+  document.getElementById('signon').style.display='none';
   document.getElementById('titleText').textContent='mIRC32 - [#0p72-1rc]';
   document.getElementById('statusLeft').textContent='Status: not connected';
   document.getElementById('nickInput').value='';
@@ -1444,8 +1492,9 @@ function doSend(){
   const low=text.toLowerCase();
   const rawcmd=low.startsWith('/') ? low.slice(1) : low;
   const verb=rawcmd.split(/\s+/)[0];
-  if(verb==='clear' || verb==='cls'){
-    if(log) log.innerHTML='';
+  if(verb==='clear' || verb==='cls' || low==='clear' || low==='cls'){
+    const box=document.getElementById('log');
+    if(box) box.innerHTML='';
     addSys('buffer cleared');
     return;
   }
