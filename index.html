@@ -107,10 +107,11 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 
   <div id="signon">
     <div class="lg">⚡ mIRC Chat ⚡</div>
-    <p>*** Connecting to server...<br>Pick a nickname to join #0p72-1rc</p>
+    <p id="signonMsg">*** Connecting to server...<br>Pick a nickname to join #0p72-1rc</p>
     <input id="nickInput" maxlength="20" placeholder="nickname" autocomplete="off">
     <div class="err" id="nickErr"></div>
     <div><button id="enterBtn">Connect</button></div>
+    <div style="margin-top:10px;font-size:11px;"><span id="forgetNickLink" style="color:#4aa3ff;cursor:pointer;text-decoration:underline;display:none;">not you? use a different nickname</span></div>
   </div>
 
 
@@ -172,6 +173,10 @@ function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 function timeStr(ts){const d=new Date(ts);return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}
 
 let nick="", myColor="";
+const NICK_KEY='mirc_saved_nickname';
+function getSavedNick(){ try{ return localStorage.getItem(NICK_KEY)||''; }catch(e){ return ''; } }
+function saveNick(n){ try{ localStorage.setItem(NICK_KEY, n); }catch(e){} }
+function clearSavedNick(){ try{ localStorage.removeItem(NICK_KEY); }catch(e){} }
 const log=document.getElementById('log');
 const memberList=document.getElementById('memberList');
 const msgSoundEl=document.getElementById('msgSound');
@@ -592,6 +597,28 @@ async function sendMessage(text){
 document.getElementById('enterBtn').addEventListener('click', enterRoom);
 document.getElementById('nickInput').addEventListener('keydown', e=>{ if(e.key==='Enter') enterRoom(); });
 
+function initSignonUI(){
+  const saved=getSavedNick();
+  const nickInput=document.getElementById('nickInput');
+  const msg=document.getElementById('signonMsg');
+  const link=document.getElementById('forgetNickLink');
+  if(saved){
+    nickInput.value=saved;
+    msg.innerHTML='*** Connecting to server...<br>Welcome back, <b>'+esc(saved)+'</b>! Click Connect to rejoin #0p72-1rc';
+    link.style.display='inline';
+  } else {
+    nickInput.value='';
+    msg.innerHTML='*** Connecting to server...<br>Pick a nickname to join #0p72-1rc';
+    link.style.display='none';
+  }
+}
+document.getElementById('forgetNickLink').addEventListener('click', ()=>{
+  clearSavedNick();
+  initSignonUI();
+  document.getElementById('nickInput').focus();
+});
+initSignonUI();
+
 const dialSoundEl=document.getElementById('dialSound');
 const welcomeSoundEl=document.getElementById('welcomeSound');
 const logoutSoundEl=document.getElementById('logoutSound');
@@ -694,6 +721,7 @@ async function enterRoom(){
   if(!val){ document.getElementById('nickErr').textContent='enter a nickname'; return; }
   if(val.length<2){ document.getElementById('nickErr').textContent='too short'; return; }
   nick=val; myColor=colorFor(nick);
+  saveNick(nick);
   connecting=true;
   document.getElementById('nickErr').textContent='';
   document.getElementById('enterBtn').disabled=true;
@@ -724,8 +752,8 @@ function signOff(){
   document.getElementById('signon').style.display='block';
   document.getElementById('titleText').textContent='mIRC32 - [#0p72-1rc]';
   document.getElementById('statusLeft').textContent='Status: not connected';
-  document.getElementById('nickInput').value='';
-  document.getElementById('nickInput').focus();
+  initSignonUI();
+  document.getElementById('enterBtn').focus();
   log.innerHTML='';
   myAway='';
   for(const k of Object.keys(awayMap)) delete awayMap[k];
