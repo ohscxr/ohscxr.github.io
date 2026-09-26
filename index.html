@@ -892,7 +892,7 @@ function incomingMessage(m){
   const rawt=msgText(m);
   if(/pirate/i.test(rawt)) startPirate();
   else if(/kirbydance/i.test(rawt)) startKirbyDance();
-  else if(isRickText(rawt)) startRickroll();
+  else if(isRickText(msgText(m)) && (forMe(m.nick, nick))) startRickroll();
   const parsed=parseCtrl(rawt);
   const isCtrl=['away','back','color','reg'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
