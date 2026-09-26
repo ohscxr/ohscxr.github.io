@@ -1569,7 +1569,6 @@ async function runWin98Boot(){
   }
   await new Promise(r=>setTimeout(r,400));
   if(logo) logo.style.display='block';
-  playWin98('w98start');
   for(let p=0;p<=100;p+=2){
     if(bar) bar.style.width=p+'%';
     await new Promise(r=>setTimeout(r,30));
@@ -1628,7 +1627,6 @@ function finishW98Logon(asNew){
   document.getElementById('w98logon').style.display='none';
   document.getElementById('desktop').style.display='block';
   tickDeskClock();
-  playWin98('w98start');
 }
 document.getElementById('w98ok').addEventListener('click', ()=>finishW98Logon(false));
 document.getElementById('w98new').addEventListener('click', ()=>{
@@ -1886,30 +1884,14 @@ function openQuake(){
 
 
 const MEMES=[
-  {id:'ayb', title:'All Your Base Are Belong To Us', src:'https://archive.org/embed/flash_allyourbase'},
-  {id:'ham', title:'Hampster Dance', src:'https://archive.org/embed/hamsterdance-hampster-slide_flash'},
-  {id:'chip', title:'Dramatic Chipmunk', src:'https://archive.org/embed/dramaticchipmunk'},
-  {id:'lime', title:'You Are A Pirate / LOL Limewire', src:''},
-  {id:'nyan', title:'Nyan Cat', src:'https://archive.org/embed/nyan-archive'},
-  {id:'nyanfly', title:'Nyan Cat FLY (Flash)', src:'https://archive.org/embed/nyan-cat-fly'},
-  {id:'troll', title:'Trololo', src:'https://archive.org/embed/rainbow-trololol'},
-  {id:'badger', title:'Badger Badger Badger', src:'https://archive.org/embed/badger-badger-badger'},
-  {id:'pbj', title:'Peanut Butter Jelly Time', src:'https://archive.org/embed/peanutbutterjellytime'},
-  {id:'kbcat', title:'Keyboard Cat', src:'https://archive.org/embed/keyboardcat'},
-  {id:'numa', title:'Numa Numa', src:'https://archive.org/embed/numanuma'},
-  {id:'leeroy', title:'LEEROY JENKINS', src:'https://archive.org/embed/leeroyjenkins'},
-  {id:'caramell', title:'Caramelldansen', src:'https://archive.org/embed/caramelldansen'},
-  {id:'kcat2', title:'Charlie Bit My Finger', src:'https://archive.org/embed/charliebitmyfinger'},
-  {id:'end', title:'It\'s the End of the World (REM flash)', src:'https://archive.org/embed/endoftheworld'},
-  {id:'weebl', title:'Weebl & Bob', src:'https://archive.org/embed/weeblandbob'},
-  {id:'strongbad', title:'Strong Bad Email', src:'https://archive.org/embed/strongbademail'},
-  {id:'homestar', title:'Homestar Runner', src:'https://archive.org/embed/homestarrunner'},
-  {id:'crazyfrog', title:'Crazy Frog / Axel F', src:'https://archive.org/embed/crazyfrogaxelf'},
-  {id:'shoop', title:'Shoop Da Whoop', src:'https://archive.org/embed/shoopdawhoop'},
-  {id:'unicorn', title:'Charlie the Unicorn', src:'https://archive.org/embed/charlietheunicorn'},
-  {id:'technov', title:'Techno Viking', src:'https://archive.org/embed/technoviking'},
-  {id:'salad', title:'Salad Fingers (ep1)', src:'https://archive.org/embed/saladfingers'},
-  {id:'zero', title:'Zero Wing intro', src:'https://archive.org/embed/zerowingintro'}
+  {id:'ayb', title:'All Your Base Are Belong To Us', type:'swf', src:'https://archive.org/download/flash_allyourbase/AYB2.swf'},
+  {id:'ham', title:'Hampster Dance', type:'swf', src:'https://archive.org/download/hamsterdance-hampster-slide_flash/Ham_Slid.swf'},
+  {id:'chip', title:'Dramatic Chipmunk', type:'video', src:'https://archive.org/download/dramaticchipmunk/Dramatic%20Chipmunk.mp4'},
+  {id:'lime', title:'You Are A Pirate / LOL Limewire', type:'local'},
+  {id:'nyan', title:'Nyan Cat', type:'video', src:'https://archive.org/download/nyan-archive/Nyan%20Cat%20original%20_360P.mp4'},
+  {id:'nyanfly', title:'Nyan Cat FLY', type:'swf', src:'https://archive.org/download/nyan-cat-fly/NyanCatFLY.swf'},
+  {id:'troll', title:'Trololo', type:'video', src:'https://archive.org/download/rainbow-trololol/Rainbow%20Trololol.mp4'},
+  {id:'aybmusic', title:'All Your Base (Gabber Robots audio)', type:'audio', src:'https://archive.org/download/invasion_of_the_gabber_rob/The%20Laziest%20Men%20on%20Mars%20-%20Invasion%20of%20the%20Gabber%20Robots.mp3'}
 ];
 function openFlash(startId){
   const wrap=document.createElement('div');
@@ -1921,19 +1903,50 @@ function openFlash(startId){
   const stage=document.createElement('div');
   stage.style.cssText='width:100%;height:360px;min-height:240px;background:#000;border:2px inset #404040;';
   wrap.appendChild(stage);
+  function ensureRuffle(cb){
+    if(window.RufflePlayer){ cb(); return; }
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/@ruffle-rs/ruffle';
+    s.onload=cb;
+    s.onerror=()=>cb(new Error('ruffle'));
+    document.head.appendChild(s);
+  }
   function load(id){
     const m=MEMES.find(x=>x.id===id)||MEMES[0];
     stage.innerHTML='';
-    if(id==='lime'){
+    if(m.type==='local' || id==='lime'){
       startPirate();
       stage.innerHTML='<div style="color:#0f0;padding:20px;font:12px Courier New;">playing LOL_LIMEWIRE locally…</div>';
       return;
     }
-    const fr=document.createElement('iframe');
-    fr.src=m.src;
-    fr.style.cssText='width:100%;height:100%;border:0;background:#000;';
-    fr.allow='autoplay; fullscreen';
-    stage.appendChild(fr);
+    if(m.type==='video'){
+      const v=document.createElement('video');
+      v.controls=true; v.autoplay=true; v.src=m.src;
+      v.style.cssText='width:100%;height:100%;background:#000;';
+      v.onerror=()=>{ stage.innerHTML='<div style="color:#f66;padding:12px;">could not load video</div>'; };
+      stage.appendChild(v);
+      return;
+    }
+    if(m.type==='audio'){
+      const a=document.createElement('audio');
+      a.controls=true; a.autoplay=true; a.src=m.src;
+      a.style.cssText='width:96%;margin:20px 2%;';
+      stage.appendChild(a);
+      return;
+    }
+    if(m.type==='swf'){
+      ensureRuffle(err=>{
+        if(err||!window.RufflePlayer){
+          stage.innerHTML='<div style="color:#fd6;padding:12px;">Flash emulator blocked. Open <a href="'+m.src+'" target="_blank" style="color:#8cf">the SWF</a></div>';
+          return;
+        }
+        window.RufflePlayer.config=window.RufflePlayer.config||{autoplay:'on'};
+        const r=window.RufflePlayer.newest().createPlayer();
+        r.style.width='100%'; r.style.height='100%';
+        stage.appendChild(r);
+        r.load(m.src);
+      });
+    }
   }
   sel.onchange=()=>load(sel.value);
   if(startId) sel.value=startId;
@@ -1962,7 +1975,6 @@ function tickDeskClock(){
   t(); setInterval(t,15000);
 }
 function openAIM(){
-  playWin98('w98chime');
   const w=document.getElementById('aimWin');
   if(w){
     w.style.display='flex';
@@ -2143,6 +2155,7 @@ async function enterRoom(){
   document.getElementById('signon').style.display='none';
   try{
     await runDialupSequence();
+    playWin98('w98start');
     await playWelcomeSound();
     await playLoginSound();
     addSys(nick+' signed on');
