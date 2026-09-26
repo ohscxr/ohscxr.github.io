@@ -492,7 +492,19 @@ document.addEventListener('mousedown', ev=>{
 function playWin98(id){
   const a=document.getElementById(id);
   if(!a) return;
-  try{ a.currentTime=0; a.volume=Math.max(0.2, dmVolume||0.8); a.play().catch(()=>{}); }catch(e){}
+  try{ a.muted=false; a.currentTime=0; a.volume=Math.max(0.35, dmVolume||0.8); const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
+}
+function armSounds(){
+  ['w98start','welcomeSound','loginSound','msgSound'].forEach(id=>{
+    const a=document.getElementById(id);
+    if(!a) return;
+    try{
+      a.muted=true;
+      const p=a.play();
+      const stop=()=>{ try{ a.pause(); a.currentTime=0; a.muted=false; }catch(e){} };
+      if(p&&p.then) p.then(stop).catch(stop); else stop();
+    }catch(e){}
+  });
 }
 function playKeySound(){ try{ const c=keySoundEl.cloneNode(true); c.play().catch(()=>{}); c.addEventListener('ended', ()=>c.remove()); }catch(e){} }
 document.getElementById('nickInput').addEventListener('input', playKeySound);
@@ -1903,13 +1915,57 @@ function openFlash(startId){
   const stage=document.createElement('div');
   stage.style.cssText='width:100%;height:360px;min-height:240px;background:#000;border:2px inset #404040;';
   wrap.appendChild(stage);
-  function ensureRuffle(cb){
-    if(window.RufflePlayer){ cb(); return; }
-    const s=document.createElement('script');
-    s.src='https://unpkg.com/@ruffle-rs/ruffle';
-    s.onload=cb;
-    s.onerror=()=>cb(new Error('ruffle'));
-    document.head.appendChild(s);
+  function playMedia(url, kind){
+    stage.innerHTML='';
+    if(kind==='video'){
+      const v=document.createElement('video');
+      v.controls=true; v.autoplay=true; v.src=url;
+      v.style.cssText='width:100%;height:100%;background:#000;';
+      v.onerror=()=>{ stage.innerHTML='<div style="color:#f66;padding:12px;">video failed</div>'; };
+      stage.appendChild(v); return;
+    }
+    const a=document.createElement('audio');
+    a.controls=true; a.autoplay=true; a.src=url; a.style.cssText='width:96%;margin:24px 2%;';
+    stage.appendChild(a);
+  }
+  function loadSwf(url){
+    stage.innerHTML='<div style="color:#0f0;padding:10px;font:12px Courier New;">loading flash…</div>';
+    const tryRuffle=()=>{
+      const sources=[
+        'https://unpkg.com/@ruffle-rs/ruffle',
+        'https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle'
+      ];
+      const go=(i)=>{
+        if(window.RufflePlayer){
+          const run=async()=>{
+            try{
+              const res=await fetch(url);
+              const buf=await res.arrayBuffer();
+              window.RufflePlayer.config={autoplay:'on', unmuteOverlay:'hidden'};
+              stage.innerHTML='';
+              const player=window.RufflePlayer.newest().createPlayer();
+              player.style.width='100%'; player.style.height='100%';
+              stage.appendChild(player);
+              player.load({data:buf, autoplay:'on'});
+            }catch(e){
+              playMedia(url.replace(/\.swf$/i,'.mp4'),'video');
+            }
+          };
+          run(); return;
+        }
+        if(i>=sources.length){
+          stage.innerHTML='<div style="color:#fd6;padding:12px;">Flash blocked here. Try Chipmunk / Nyan / Trololo (mp4) or Limewire.</div>';
+          return;
+        }
+        const s=document.createElement('script');
+        s.src=sources[i];
+        s.onload=()=>go(i+1);
+        s.onerror=()=>go(i+1);
+        document.head.appendChild(s);
+      };
+      go(0);
+    };
+    tryRuffle();
   }
   function load(id){
     const m=MEMES.find(x=>x.id===id)||MEMES[0];
@@ -1919,34 +1975,8 @@ function openFlash(startId){
       stage.innerHTML='<div style="color:#0f0;padding:20px;font:12px Courier New;">playing LOL_LIMEWIRE locally…</div>';
       return;
     }
-    if(m.type==='video'){
-      const v=document.createElement('video');
-      v.controls=true; v.autoplay=true; v.src=m.src;
-      v.style.cssText='width:100%;height:100%;background:#000;';
-      v.onerror=()=>{ stage.innerHTML='<div style="color:#f66;padding:12px;">could not load video</div>'; };
-      stage.appendChild(v);
-      return;
-    }
-    if(m.type==='audio'){
-      const a=document.createElement('audio');
-      a.controls=true; a.autoplay=true; a.src=m.src;
-      a.style.cssText='width:96%;margin:20px 2%;';
-      stage.appendChild(a);
-      return;
-    }
-    if(m.type==='swf'){
-      ensureRuffle(err=>{
-        if(err||!window.RufflePlayer){
-          stage.innerHTML='<div style="color:#fd6;padding:12px;">Flash emulator blocked. Open <a href="'+m.src+'" target="_blank" style="color:#8cf">the SWF</a></div>';
-          return;
-        }
-        window.RufflePlayer.config=window.RufflePlayer.config||{autoplay:'on'};
-        const r=window.RufflePlayer.newest().createPlayer();
-        r.style.width='100%'; r.style.height='100%';
-        stage.appendChild(r);
-        r.load(m.src);
-      });
-    }
+    if(m.type==='video' || m.type==='audio'){ playMedia(m.src, m.type); return; }
+    if(m.type==='swf') loadSwf(m.src);
   }
   sel.onchange=()=>load(sel.value);
   if(startId) sel.value=startId;
@@ -2003,6 +2033,7 @@ document.getElementById('icoSol').addEventListener('dblclick', openSolitaire);
 document.getElementById('icoMine').addEventListener('dblclick', openMines);
 document.getElementById('icoQuake').addEventListener('dblclick', openQuake);
 document.getElementById('icoTheme').addEventListener('dblclick', openThemes);
+document.getElementById('icoFlash').addEventListener('click', ()=>openFlash());
 document.getElementById('icoFlash').addEventListener('dblclick', ()=>openFlash());
 document.getElementById('icoMail').addEventListener('dblclick', openMailbox);
 
@@ -2150,6 +2181,7 @@ async function enterRoom(){
   claimNick(nick, myUid);
   saveProfile();
   connecting=true;
+  armSounds();
   document.getElementById('nickErr').textContent='';
   document.getElementById('enterBtn').disabled=true;
   document.getElementById('signon').style.display='none';
