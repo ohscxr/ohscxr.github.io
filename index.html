@@ -166,6 +166,14 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 .card.red{color:#c00;}
 .card.back{background:#204a9a;color:#204a9a;background-image:repeating-linear-gradient(45deg,#1a3a80 0 6px,#2a5ab0 6px 12px);}
 .card.sel{outline:2px solid #ff0;}
+
+.aimrun{display:inline-block;animation:aimrun 0.5s steps(2) infinite;filter:drop-shadow(0 0 1px #ff0);}
+@keyframes aimrun{from{transform:translateX(0) scaleX(1)}50%{transform:translateX(3px) scaleX(-1)}to{transform:translateX(0) scaleX(1)}}
+.av{width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:4px;border-radius:2px;background:#ddd;text-align:center;line-height:16px;font-size:12px;}
+.avbig{width:48px;height:48px;font-size:28px;line-height:48px;border:2px inset #808080;background:#fff;text-align:center;display:inline-block;}
+.avpick{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;}
+.avpick i{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid #808080;cursor:pointer;background:#fff;font-size:16px;}
+.avpick i.on{outline:2px solid #000080;}
 ::-webkit-scrollbar{width:14px;}
 ::-webkit-scrollbar-track{background:#ddd;}
 ::-webkit-scrollbar-thumb{background:var(--win);border:2px outset #fff;}
@@ -218,7 +226,7 @@ Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
   <div id="taskbar"><div class="start">Start</div><span style="font-size:11px;color:#000;">Welcome</span><span class="clk" id="deskClock"></span></div>
 </div>
 <div class="win" id="aimWin">
-  <div class="titlebar"><span class="ic">💻</span><span id="titleText">mIRC32 - [#0p72-1rc]</span><span class="btns"><span id="minBtn">_</span><span id="maxBtn">▢</span><span id="logoutBtn" title="Sign Off">✕</span></span></div>
+  <div class="titlebar"><span class="ic aimrun" title="AIM">🏃</span><span id="titleText">AOL Instant Messenger - Buddy List</span><span class="btns"><span id="minBtn">_</span><span id="maxBtn">▢</span><span id="logoutBtn" title="Sign Off">✕</span></span></div>
   <div class="menubar"><span>File</span><span>Tools</span><span>DCC</span><span>Commands</span><span>Window</span><span>Help</span></div>
   <div class="toolbar">
     <div class="tbtn" id="btnImg" title="Send image">🖼️</div>
@@ -231,8 +239,8 @@ Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
   </div>
 
   <div id="signon" style="display:none;">
-    <div class="lg">⚡ mIRC Chat ⚡</div>
-    <p>*** Connecting to server...<br>Pick a nickname to join #0p72-1rc</p>
+    <div class="lg">🏃 AOL Instant Messenger</div>
+    <p>Sign on to AIM<br>#0p72-1rc</p>
     <input id="nickInput" maxlength="32" placeholder="nickname ($ ok)" autocomplete="off">
     <div style="margin-top:8px;font-size:12px;color:#c0c0c0;">name color <span id="nickColorPreview"></span>
       <input id="nickColorInput" type="color" value="#4aa3ff" style="margin-left:6px;width:32px;height:20px;vertical-align:middle;padding:0;border:1px solid #808080;">
@@ -410,6 +418,14 @@ function beep(el, vol){
 function playMsgSound(){ beep(msgSoundEl, dmVolume); }
 function playDmSound(){ beep(msgSoundEl, dmVolume); }
 function playLoginSound(){ beep(loginSoundEl, dmVolume); }
+let lastClick=0;
+document.addEventListener('mousedown', ev=>{
+  if(!ev.target || ev.target.closest && ev.target.closest('input,textarea,select')) return;
+  const now=Date.now();
+  if(now-lastClick<70) return;
+  lastClick=now;
+  playWin98('w98ding');
+}, true);
 function playWin98(id){
   const a=document.getElementById(id);
   if(!a) return;
@@ -443,6 +459,20 @@ try{
 if(!bioMap.Yamz) bioMap.Yamz='Kyaw U (Yamz / Nyan Cat)\nYangon, Myanmar\n19 (b. 1976 — it is 1995)\n5\'7\"\nRally cars, house music, computer games';
 
 function saveBios(){ try{ localStorage.setItem('mirc_bios', JSON.stringify(bioMap)); }catch(e){} }
+const AVS=['🏃','😺','🚗','⭐','😎','👽','📻','🌺','💻','🎸'];
+const avatarMap={Yamz:'😺'};
+try{ Object.assign(avatarMap, JSON.parse(localStorage.getItem('mirc_avatars')||'{}')); }catch(e){}
+function saveAvatars(){ try{ localStorage.setItem('mirc_avatars', JSON.stringify(avatarMap)); }catch(e){} }
+function avOf(n){
+  if(avatarMap[n]) return avatarMap[n];
+  const k=Object.keys(avatarMap).find(x=>x.toLowerCase()===String(n||'').toLowerCase());
+  return k?avatarMap[k]:'🙂';
+}
+function setAvatar(n, a){
+  if(!n||!a) return;
+  avatarMap[n]=a; saveAvatars();
+}
+
 function bioOf(n){
   if(!n) return '';
   if(bioMap[n]) return bioMap[n];
@@ -483,6 +513,11 @@ function parseCtrl(text){
   if(text.startsWith('[[CTRL:COLOR]]')){
     out.kind='color';
     out.color=text.slice(14).trim();
+    return out;
+  }
+  if(text.startsWith('[[CTRL:AVATAR]]')){
+    out.kind='avatar';
+    out.avatar=text.slice(15).trim();
     return out;
   }
   if(text.startsWith('[[CTRL:BIO]]')){
@@ -568,7 +603,12 @@ function renderMessages(msgs){
         if(/^#[0-9a-fA-F]{6}$/.test(parsed.color||'')){ peerColors[m.nick]=parsed.color; colorLocked[m.nick]=true; persistColors(); }
         continue;
       }
-      if(parsed.kind==='bio'){
+      if(parsed.kind==='avatar'){
+    if(parsed.avatar) setAvatar(m.nick, parsed.avatar);
+    refreshList();
+    return;
+  }
+  if(parsed.kind==='bio'){
     setBio(m.nick, parsed.bio||'');
     saveBios();
     addSys(m.nick+' updated their profile');
@@ -710,14 +750,12 @@ function nickRow(nm, col, state, isMe){
   const st=state==='away'?'AWAY':(state==='offline'?'OFF':'ON');
   const stcls=state==='away'?'aw':(state==='offline'?'off':'on');
   const mark=isMe?'@':(state==='away'?'-':(state==='offline'?'#':'+'));
-  d.innerHTML=`<span class="dot" style="background:${esc(col||'#c0c0c0')}"></span><span style="color:${esc(col||'#c0c0c0')}">${mark}${esc(nm)}</span><span class="st ${stcls}">${st}</span>`;
+  d.innerHTML=`<span class="av">${avOf(nm)}</span><span class="dot" style="background:${esc(col||'#c0c0c0')}"></span><span style="color:${esc(col||'#c0c0c0')}">${mark}${esc(nm)}</span><span class="st ${stcls}">${st}</span>`;
   if(state==='away' && isAwayNick(nm)) d.title='Away: '+awayMap[awayKey(nm)];
   else if(state==='offline') d.title=nm+' is not in chat';
   else d.title=(bioOf(nm)?bioOf(nm).split('\n')[0]+' — ':'')+(isMe?'you (click profile)':('profile / IM '+nm));
-  d.addEventListener('click', ()=>{
-    if(isMe) openProfile(nm, true);
-    else openProfile(nm, false);
-  });
+  d.addEventListener('click', ()=>openProfile(nm, !!isMe));
+  d.addEventListener('dblclick', ev=>{ ev.preventDefault(); if(!isMe) openDM(nm); });
   return d;
 }
 
@@ -824,6 +862,7 @@ function connectWebSocket(){
     ws.send(JSON.stringify({type:'join', nickname:nick, color:myColor, uid:myUid}));
     ws.send(JSON.stringify({type:'message', text:'[[CTRL:REG]]'+nick+'|'+myUid}));
     if(bioOf(nick)) ws.send(JSON.stringify({type:'message', text:'[[CTRL:BIO]]'+bioOf(nick)}));
+    if(avOf(nick)) ws.send(JSON.stringify({type:'message', text:'[[CTRL:AVATAR]]'+avOf(nick)}));
     document.getElementById('statusLeft').textContent = `Status: ${nick} on #0p72-1rc (connected)`;
   });
 
@@ -1025,27 +1064,48 @@ function openProfile(who, edit){
   m.id='profModal';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:90;display:flex;align-items:center;justify-content:center;';
   const bio=bioOf(who);
-  m.innerHTML='<div style="width:300px;background:var(--win);border:2px solid #fff;border-right-color:#404040;border-bottom-color:#404040;padding:0;">'
-    +'<div style="background:linear-gradient(90deg,var(--title1),var(--title2));color:#fff;padding:4px 6px;font-weight:bold;font-size:12px;">'+esc(who)+' — profile</div>'
+  const av=avOf(who);
+  const on=knownPeers && [...knownPeers].some(n=>sameNick(n,who));
+  const away=isAwayNick(who);
+  const st=on?(away?'Away':'Online'):'Offline';
+  m.innerHTML='<div style="width:320px;background:var(--win);border:2px solid #fff;border-right-color:#404040;border-bottom-color:#404040;padding:0;">'
+    +'<div style="background:linear-gradient(90deg,var(--title1),var(--title2));color:#fff;padding:4px 6px;font-weight:bold;font-size:12px;">🏃 '+esc(who)+'</div>'
     +'<div style="padding:10px;font-size:12px;">'
+    +'<div style="display:flex;gap:10px;align-items:flex-start;">'
+    +'<div class="avbig" id="avBig">'+av+'</div>'
+    +'<div><b>'+esc(who)+'</b><div>Status: '+st+'</div></div></div>'
+    +(edit?('<div class="avpick" id="avPick">'+AVS.map(a=>'<i data-a="'+a+'" class="'+(a===av?'on':'')+'">'+a+'</i>').join('')+'</div>'):'')
     +(edit?'<div>Your bio</div><textarea id="bioBox" style="width:100%;height:70px;font-family:Tahoma;">'+esc(bio)+'</textarea>'
-          :'<div style="white-space:pre-wrap;min-height:48px;border:2px inset #808080;padding:6px;background:#fff;">'+(bio?esc(bio):'<i>no profile yet</i>')+'</div>')
+          :'<div style="white-space:pre-wrap;min-height:48px;border:2px inset #808080;padding:6px;background:#fff;margin-top:8px;">'+(bio?esc(bio):'<i>no profile yet</i>')+'</div>')
     +'<div style="margin-top:8px;text-align:right;">'
-    +(edit?'<button class="send" id="bioSave">Save</button>':'<button class="send" id="bioIm">Message</button>')
+    +(edit?'<button class="send" id="bioSave">Save</button>':'<button class="send" id="bioIm">Instant Message</button><button class="send" id="bioAdd">Add Buddy</button>')
     +'<button class="send" id="bioX">Close</button></div></div></div>';
   document.body.appendChild(m);
   m.querySelector('#bioX').onclick=()=>m.remove();
   m.onclick=ev=>{ if(ev.target===m) m.remove(); };
   if(edit){
+    m.querySelectorAll('#avPick i').forEach(i=>{
+      i.onclick=()=>{
+        m.querySelectorAll('#avPick i').forEach(x=>x.classList.remove('on'));
+        i.classList.add('on');
+        const a=i.getAttribute('data-a');
+        setAvatar(who,a);
+        m.querySelector('#avBig').textContent=a;
+        sendMessage('[[CTRL:AVATAR]]'+a);
+        refreshList();
+      };
+    });
     m.querySelector('#bioSave').onclick=()=>{
       const t=m.querySelector('#bioBox').value.trim();
       setBio(who,t);
-      if(t) sendMessage('[[CTRL:BIO]]'+t);
-      addSys('profile saved');
+      sendMessage('[[CTRL:BIO]]'+(t||''));
+      addSys('profile saved — others can see it');
       m.remove();
+      refreshList();
     };
   } else {
     m.querySelector('#bioIm').onclick=()=>{ m.remove(); openDM(who); };
+    m.querySelector('#bioAdd').onclick=()=>{ rememberBuddy(who); addSys('added '+who+' to buddy list'); };
   }
 }
 
@@ -1057,7 +1117,7 @@ function incomingMessage(m){
   else if(/^\/kirbydance\b/i.test(rawt.trim()) || /^\/kirby\b/i.test(rawt.trim())) startKirbyDance();
   else if(/^\/rick\b/i.test(rawt.trim())) startRickroll();
   const parsed=parseCtrl(rawt);
-  const isCtrl=['away','back','color','reg','bio'].includes(parsed.kind);
+  const isCtrl=['away','back','color','reg','bio','avatar'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
   if(myAway){ appendMessage(m); return; }
   if(isCtrl){ appendMessage(m); return; }
@@ -1093,6 +1153,11 @@ function appendMessage(m){
       if(sameNick(m.nick,nick)) myColor=parsed.color;
       if(knownPeers) renderMembers([...(knownPeers||[])].map(n=>({presence:{nickname:n,color:peerColors[n]}, isMe:n===nick})));
     }
+    return;
+  }
+  if(parsed.kind==='avatar'){
+    if(parsed.avatar) setAvatar(m.nick, parsed.avatar);
+    refreshList();
     return;
   }
   if(parsed.kind==='bio'){
@@ -1848,8 +1913,11 @@ function signOff(){
   log.innerHTML='';
   myAway='';
   for(const k of Object.keys(awayMap)) delete awayMap[k];
+  persistBuddies();
+  persistColors();
+  saveBios();
+  saveAvatars();
   knownPeers=null;
-  for(const k of Object.keys(offlineMap)) delete offlineMap[k];
   for(const k of Object.keys(dmWins)){ try{dmWins[k].remove();}catch(e){} delete dmWins[k]; }
 }
 
@@ -1913,6 +1981,11 @@ function doSend(){
     rickStrikes++;
     if(rickStrikes>=3){ rickStrikes=0; win95CrashRelog(); }
     return;
+  }
+  if(verb==='avatar'){
+    const a=(text.split(/\s+/)[1]||'').trim();
+    if(!a){ addSys('avatars: '+AVS.join(' ')); return; }
+    setAvatar(nick,a); sendMessage('[[CTRL:AVATAR]]'+a); refreshList(); addSys('avatar set'); return;
   }
   if(verb==='bio' || verb==='profile'){
     const msg=text.slice(text.indexOf(' ')+1).trim();
