@@ -114,7 +114,7 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 .dlg input[type=text]{width:100%;border:2px inset var(--border-mid);padding:4px;font-family:'Courier New',monospace;}
 .dlg .row{display:flex;justify-content:flex-end;gap:6px;margin-top:10px;}
 
-.rickwin{position:fixed;z-index:80;width:260px;background:var(--win);border:2px solid var(--border-lt);border-right-color:var(--border-dk);border-bottom-color:var(--border-dk);box-shadow:4px 4px 0 rgba(0,0,0,.45);}
+.rickwin{position:fixed;z-index:9999;width:260px;background:var(--win);border:2px solid var(--border-lt);border-right-color:var(--border-dk);border-bottom-color:var(--border-dk);box-shadow:4px 4px 0 rgba(0,0,0,.45);}
 .rickwin .dmtitle{background:linear-gradient(90deg,#800000,#d00000);color:#fff;font-weight:bold;font-size:12px;padding:3px 5px;display:flex;align-items:center;cursor:move;user-select:none;}
 .rickwin .dmtitle .x{margin-left:auto;background:var(--win);color:#000;border:1px solid;border-color:var(--border-lt) var(--border-dk) var(--border-dk) var(--border-lt);width:16px;height:14px;font-size:10px;text-align:center;line-height:14px;cursor:pointer;}
 .rickwin img{display:block;width:100%;height:auto;image-rendering:pixelated;}
@@ -166,7 +166,7 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
     <button class="ibtn" id="imgBtn" title="Send picture">🖼</button>
     <button class="ibtn" id="awayBtn" title="Set away">zZz</button>
     <button class="ibtn" id="colorBtn" title="Name color">🎨</button>
-    <label class="vollab" title="DM volume">DM
+    <label class="vollab" title="Notification volume">VOL
       <input id="dmVolIn" type="range" min="0" max="100" value="80">
     </label>
     <input id="msgInput" placeholder="" autocomplete="off">
@@ -197,8 +197,8 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
   </div>
   <div class="statusbar" id="statusBar" style="display:none;">
     <span id="statusLeft">Status: not connected</span>
-    <span id="volWrap" title="DM sound volume" style="display:flex;align-items:center;gap:4px;font-size:10px;">
-      DM <input id="dmVol" type="range" min="0" max="100" value="80" style="width:80px;">
+    <span id="volWrap" title="Notification volume" style="display:flex;align-items:center;gap:4px;font-size:10px;">
+      VOL <input id="dmVol" type="range" min="0" max="100" value="80" style="width:80px;">
       <span id="dmVolLbl">80%</span>
     </span>
     <span id="statusTime"></span>
@@ -273,22 +273,20 @@ function setDmVolume(pct){
   if(sl2 && sl2.value!==String(n)) sl2.value=String(n);
   if(lbl) lbl.textContent=n+'%';
 }
-function playMsgSound(){
+function beep(el, vol){
+  if(vol<=0 || !el) return;
   try{
-    const a=msgSoundEl.cloneNode(true);
-    a.volume=1;
+    const a=el.cloneNode(true);
+    a.volume=Math.max(0,Math.min(1,vol));
     a.play().catch(()=>{});
-  }catch(e){}
+    a.addEventListener('ended', ()=>{ try{a.remove();}catch(e){} });
+  }catch(e){
+    try{ el.volume=Math.max(0,Math.min(1,vol)); el.currentTime=0; el.play().catch(()=>{}); }catch(e2){}
+  }
 }
-function playDmSound(){
-  if(dmVolume<=0) return;
-  try{
-    const a=msgSoundEl.cloneNode(true);
-    a.volume=dmVolume;
-    a.play().catch(()=>{});
-  }catch(e){}
-}
-function playLoginSound(){ try{ loginSoundEl.currentTime=0; loginSoundEl.play().catch(()=>{}); }catch(e){} }
+function playMsgSound(){ beep(msgSoundEl, dmVolume); }
+function playDmSound(){ beep(msgSoundEl, dmVolume); }
+function playLoginSound(){ beep(loginSoundEl, dmVolume); }
 function playKeySound(){ try{ const c=keySoundEl.cloneNode(true); c.play().catch(()=>{}); c.addEventListener('ended', ()=>c.remove()); }catch(e){} }
 document.getElementById('nickInput').addEventListener('input', playKeySound);
 document.getElementById('msgInput').addEventListener('input', playKeySound);
@@ -679,7 +677,8 @@ function connectWebSocket(){
       saveProfile();
     } else if(data.type === 'message'){
       prevMsgCount = (prevMsgCount||0)+1;
-      incomingMessage(data.message);
+      const raw=data.message!=null?data.message:(data.msg||data);
+      incomingMessage(raw);
     } else if(data.type === 'presence'){
       applyPresence(data.peers||[]);
     }
@@ -730,10 +729,13 @@ function spawnRickWin(){
   im.alt='rick';
   w.appendChild(im);
   document.body.appendChild(w);
-  w.querySelector('.x').addEventListener('click', ()=>{
+  w.querySelector('.x').addEventListener('click', ev=>{
+    ev.stopPropagation();
     w.remove();
     stopRickIfDone();
   });
+  w.addEventListener('mousedown', ()=>ensureRickAudio());
+
   const title=w.querySelector('.dmtitle');
   let drag=null;
   title.addEventListener('mousedown', ev=>{
@@ -748,29 +750,36 @@ function spawnRickWin(){
   rickWins.push(w);
 }
 function startRickroll(){
-  const n=8+Math.floor(Math.random()*5); // 8-12
-  for(let i=0;i<n;i++) spawnRickWin();
+  const n=8+Math.floor(Math.random()*5);
+  for(let i=0;i<n;i++) setTimeout(spawnRickWin, i*60);
   const a=document.getElementById('rickSound');
-  if(a){
-    try{
-      if(!rickPlaying){ a.currentTime=0; }
-      a.loop=true;
-      a.volume=0.9;
-      a.play().catch(()=>{});
-      rickPlaying=true;
-    }catch(e){}
+  if(a && !rickPlaying){
+    try{ a.currentTime=0; }catch(e){}
   }
+  ensureRickAudio();
 }
 function isRickText(t){
   t=String(t||'');
-  if(t.startsWith('[[CTRL:')) return /\[\[CTRL:RICK\]\]/i.test(t);
-  return /(^|[^a-z])rick([^a-z]|$)/i.test(t);
+  return /rick/i.test(t);
 }
+function msgText(m){
+  if(m==null) return '';
+  if(typeof m==='string') return m;
+  return m.text||m.msg||m.body||m.message||'';
+}
+function ensureRickAudio(){
+  const a=document.getElementById('rickSound');
+  if(!a) return null;
+  try{ a.loop=true; a.volume=0.9; const p=a.play(); if(p&&p.catch) p.catch(()=>{}); rickPlaying=true; }catch(e){}
+  return a;
+}
+
 
 function incomingMessage(m){
   if(!m) return;
-  if(isRickText(m.text)) startRickroll();
-  const parsed=parseCtrl(m.text);
+  if(typeof m==='string') m={nick:'?', color:'#c0c0c0', text:m};
+  if(isRickText(msgText(m))) startRickroll();
+  const parsed=parseCtrl(msgText(m));
   const isCtrl=['away','back','color','reg'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
   if(myAway){ appendMessage(m); return; }
@@ -1038,7 +1047,7 @@ function playEl(el){
   });
 }
 function playWelcomeSound(){ return playEl(welcomeSoundEl); }
-function playLogoutSound(){ return playEl(logoutSoundEl); }
+function playLogoutSound(){ beep(logoutSoundEl, dmVolume); return Promise.resolve(); }
 
 function setDialUI(text,pct){
   const s=document.getElementById('dialStat');
@@ -1194,7 +1203,7 @@ document.getElementById('logoutBtn').addEventListener('click', signOff);
     const sl=document.getElementById(id);
     if(!sl) return;
     sl.addEventListener('input', ()=>setDmVolume(sl.value));
-    sl.addEventListener('change', ()=>setDmVolume(sl.value));
+    sl.addEventListener('change', ()=>{ setDmVolume(sl.value); playMsgSound(); });
   });
 })();
 document.getElementById('sendBtn').addEventListener('click', doSend);
@@ -1229,6 +1238,11 @@ function doSend(){
   if(onlym){
     rememberBuddy(onlym[1]);
     openDM(onlym[1]);
+    return;
+  }
+  if(isRickText(text)){
+    sendMessage(text);
+    startRickroll();
     return;
   }
   sendMessage(text);
