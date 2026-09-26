@@ -890,16 +890,16 @@ function incomingMessage(m){
   if(!m) return;
   if(typeof m==='string') m={nick:'?', color:'#c0c0c0', text:m};
   const rawt=msgText(m);
+  const forMe=sameNick(m.nick,nick) || sameNick(parsed.to,nick);
   if(/pirate/i.test(rawt)) startPirate();
   else if(/kirbydance/i.test(rawt)) startKirbyDance();
-  else if(isRickText(msgText(m)) && (forMe(m.nick, nick))) startRickroll();
+  else if(isRickText(msgText(m)) && (forMe)) startRickroll();
   const parsed=parseCtrl(rawt);
   const isCtrl=['away','back','color','reg'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
   if(myAway){ appendMessage(m); return; }
   if(isCtrl){ appendMessage(m); return; }
   if(isDm){
-    const forMe=sameNick(m.nick,nick) || sameNick(parsed.to,nick);
     if(forMe) playDmSound();
     appendMessage(m);
     return;
