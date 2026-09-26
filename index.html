@@ -135,7 +135,7 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
   <div id="signon">
     <div class="lg">⚡ mIRC Chat ⚡</div>
     <p>*** Connecting to server...<br>Pick a nickname to join #0p72-1rc</p>
-    <input id="nickInput" maxlength="20" placeholder="nickname" autocomplete="off">
+    <input id="nickInput" maxlength="32" placeholder="nickname ($ ok)" autocomplete="off">
     <div style="margin-top:8px;font-size:12px;color:#c0c0c0;">name color <span id="nickColorPreview"></span>
       <input id="nickColorInput" type="color" value="#4aa3ff" style="margin-left:6px;width:32px;height:20px;vertical-align:middle;padding:0;border:1px solid #808080;">
     </div>
@@ -461,6 +461,23 @@ function persistBuddies(){
   }
   try{ localStorage.setItem('mirc_buddies', JSON.stringify(book)); }catch(e){}
 }
+function rememberBuddy(nm, color){
+  nm=String(nm||'').trim();
+  if(!nm) return;
+  if(nick && sameNick(nm,nick)) return;
+  const col=color||peerColors[nm]||colorFor(nm);
+  peerColors[nm]=peerColors[nm]||col;
+  const online=knownPeers && [...knownPeers].some(n=>sameNick(n,nm));
+  if(!online){
+    let existing=null;
+    for(const k of Object.keys(offlineMap)){ if(sameNick(k,nm)) existing=k; }
+    offlineMap[existing||nm]={color:col, at:Date.now()};
+  }
+  persistBuddies();
+  persistColors();
+  refreshList();
+}
+
 function awayKey(n){ return String(n||'').toLowerCase(); }
 function isAwayNick(n){ return Object.prototype.hasOwnProperty.call(awayMap, awayKey(n)); }
 function setAwayNick(n, msg){
@@ -593,6 +610,22 @@ function renderMembers(peers){
   addGroup('online','Online',online,'online','online');
   addGroup('away','Away',away,'away','away');
   addGroup('offline','Offline',offline,'offline','offline');
+  const add=document.createElement('div');
+  add.style.cssText='padding:6px 6px 8px;border-top:1px solid #808080;margin-top:auto;';
+  add.innerHTML='<div style="font-size:10px;color:#444;margin-bottom:3px;">add user</div>';
+  const inp=document.createElement('input');
+  inp.placeholder='type nick + Enter';
+  inp.style.cssText='width:100%;font-size:11px;font-family:Courier New,monospace;box-sizing:border-box;';
+  inp.addEventListener('keydown', ev=>{
+    if(ev.key!=='Enter') return;
+    const v=inp.value.trim();
+    if(!v) return;
+    inp.value='';
+    rememberBuddy(v);
+    addSys('added '+v+' — OFFLINE until they join');
+  });
+  add.appendChild(inp);
+  memberList.appendChild(add);
 }
 
 // --- Real cross-device networking via a Cloudflare Worker (Durable Object) ---
@@ -790,6 +823,7 @@ function dmKey(who){
 }
 function openDM(who){
   if(!who || sameNick(who,nick)) return;
+  rememberBuddy(who);
   ensureDM(who, true);
 }
 function ensureDM(who, focus){
@@ -1013,7 +1047,8 @@ async function enterRoom(){
   const val=document.getElementById('nickInput').value.trim();
   if(!val){ document.getElementById('nickErr').textContent='enter a nickname'; return; }
   if(val.length<2){ document.getElementById('nickErr').textContent='too short'; return; }
-  if(!/^[-a-zA-Z0-9_\[\]^`{}|]+$/.test(val)){ document.getElementById('nickErr').textContent='letters, numbers, _ only'; return; }
+  if(/\s/.test(val) || /\[\[/.test(val)){ document.getElementById('nickErr').textContent='no spaces'; return; }
+  if(!/^[\x21-\x7E\u00A0-\uFFFD]+$/.test(val)){ document.getElementById('nickErr').textContent='invalid characters'; return; }
   const takenBy=ownerOf(val);
   if(takenBy && takenBy!==myUid){
     document.getElementById('nickErr').textContent='that username is already taken';
@@ -1105,10 +1140,23 @@ function doSend(){
     setAway('');
     return;
   }
+  const addm=text.match(/^\/(?:add|buddy|notify)\s+(\S+)/i);
+  if(addm){
+    rememberBuddy(addm[1]);
+    addSys('added '+addm[1]+' to buddy list (offline until they sign on)');
+    return;
+  }
   const msgm=text.match(/^\/(?:msg|query)\s+(\S+)\s+([\s\S]+)/i);
   if(msgm){
+    rememberBuddy(msgm[1]);
     openDM(msgm[1]);
     sendMessage('[[CTRL:DM|'+msgm[1]+']]'+msgm[2]);
+    return;
+  }
+  const onlym=text.match(/^\/(?:msg|query)\s+(\S+)\s*$/i);
+  if(onlym){
+    rememberBuddy(onlym[1]);
+    openDM(onlym[1]);
     return;
   }
   sendMessage(text);
