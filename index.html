@@ -46,7 +46,13 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 .nicklist .grp.online{background:#d8ffd8;color:#006000;}
 .nicklist .grp.away{background:#ffe7b0;color:#7a4a00;}
 .nicklist .grp.offline{background:#e8e8e8;color:#505050;}
-.nicklist .n{padding:1px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:bold;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;}
+.nicklist .n{padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:bold;text-shadow:none;}
+.nicklist .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;border:1px solid #333;vertical-align:middle;}
+.nicklist .st{font-weight:normal;font-size:10px;margin-left:4px;}
+.nicklist .st.on{color:#008800;}
+.nicklist .st.aw{color:#b86b00;}
+.nicklist .st.off{color:#777;}
+
 .nicklist .n.offuser{opacity:.55;text-shadow:none;font-weight:normal;}
 #colorPop{display:none;position:absolute;bottom:34px;left:28px;background:var(--win);border:2px solid;border-color:var(--border-lt) var(--border-dk) var(--border-dk) var(--border-lt);padding:6px;z-index:41;width:160px;}
 #colorPop .etitle{font-size:11px;background:linear-gradient(90deg,var(--title1),var(--title2));color:#fff;padding:2px 4px;margin:-6px -6px 6px;}
@@ -283,12 +289,17 @@ document.getElementById('msgInput').addEventListener('input', playKeySound);
 function addSys(text){ const d=document.createElement('div'); d.className='line sys'; d.textContent='*** '+text; log.appendChild(d); log.scrollTop=log.scrollHeight; }
 
 
-const EMOTES=[":)",":(",":D",";)",":P",":p",":O",":o",":/",":\\",":|",":'(",") :",":-( ",":-)",":-D",";-)",":-P",":-O",":-/",
-"xD","XD",":3","<3","</3","^^","^_^",">:(",">:)",">:D","o_O","O_o","-_-","-_-'","$_$","@_+",":$",":#",":*",":x",":X",
-"8)", "8-)", "B)", "B-)", "0:)", "O:)", ":'(", ":')", "D:", ";_;", "T_T", "T-T", "v.v", "u_u",
-":]",":[",":}","}:",":^)",":&",":- &","</3 ","<\3",":-3",";3",">:3","x3","xd",
-"¯\\_(ツ)_/¯", "ಠ_ಠ", "ಥ_ಥ", "(╯°□°）╯", "ʕ•ᴥ•ʔ", "¬_¬", "•_•", "(•_•)", "( ͡° ͜ʖ ͡°)",
-":like:",":yes:",":no:",":wave:",":lol:",":heh:",":wow:",":hmm:",":ok:",":brb:"];
+const EMOTES=[
+":)",":(",":D",";)",":P",":p",":O",":o",":/",":|",":'(",") :",":-)",":-(",":-D",";-)",":-P",":-O",":-/",
+":]",":[",":}",":{",":^)",":*",":x",":X",":$",":#",":&","8)", "8-)", "B)", "B-)", "0:)", "O:)",
+"xD","XD",":3",";3",">:3","x3",":-3","<3","</3",">:(",">:)",">:D","D:","D-:",
+"o_O","O_o","-_-","-_-'","^_^","^^","u_u","v.v","T_T","T-T",";_;",":'(",":')",
+":like:",":yes:",":no:",":wave:",":lol:",":heh:",":wow:",":hmm:",":ok:",":brb:",":gg:",":idk:",":wait:",":soon:",
+"¯\\_(ツ)_/¯","ಠ_ಠ","ಥ_ಥ","¬_¬","•_•","(•_•)","ʕ•ᴥ•ʔ","(╯°□°）╯","( ͡° ͜ʖ ͡°)",
+":)", ":-)", ":-(", ";)", ":-]", ":->", ":-}", ":~)", ":>", ":c)",
+"<3","♥","♡","★","☆","✓","✔","✘","•","~","^^;;",":;;",
+":shrug:",":thumb:",":fire:",":100:",":skull:",":heart:",":cool:",":mad:",":sad:",":happy:"
+];
 const awayMap={};
 let myAway="";
 const dmWins={};
@@ -391,10 +402,10 @@ function renderMessages(msgs){
   if(msgs && msgs.length){
     for(const m of msgs){
       const parsed=parseCtrl(m.text);
-      if(parsed.kind==='away'){ awayMap[m.nick]=parsed.away; continue; }
-      if(parsed.kind==='back'){ delete awayMap[m.nick]; continue; }
+      if(parsed.kind==='away'){ setAwayNick(m.nick, parsed.away); continue; }
+      if(parsed.kind==='back'){ setAwayNick(m.nick,null); continue; }
       if(parsed.kind==='color'){
-        if(/^#[0-9a-fA-F]{6}$/.test(parsed.color||'')) peerColors[m.nick]=parsed.color;
+        if(/^#[0-9a-fA-F]{6}$/.test(parsed.color||'')){ peerColors[m.nick]=parsed.color; colorLocked[m.nick]=true; persistColors(); }
         continue;
       }
       if(parsed.kind==='reg'){
@@ -420,7 +431,44 @@ function renderMessages(msgs){
 let knownPeers=null; // null = first snapshot, don't ding everyone
 
 const peerColors={};
+const colorLocked={};
 const offlineMap={};
+try{
+  const savedC=JSON.parse(localStorage.getItem('mirc_colors')||'{}');
+  if(savedC&&typeof savedC==='object') Object.assign(peerColors,savedC);
+  const savedL=JSON.parse(localStorage.getItem('mirc_colorlock')||'{}');
+  if(savedL&&typeof savedL==='object') Object.assign(colorLocked,savedL);
+  const savedB=JSON.parse(localStorage.getItem('mirc_buddies')||'{}');
+  if(savedB&&typeof savedB==='object'){
+    for(const [k,v] of Object.entries(savedB)){
+      if(v&&v.nick) offlineMap[v.nick]= {color:v.color||'#808080', at:v.at||Date.now()};
+    }
+  }
+}catch(e){}
+function persistColors(){
+  try{ localStorage.setItem('mirc_colors', JSON.stringify(peerColors));
+       localStorage.setItem('mirc_colorlock', JSON.stringify(colorLocked)); }catch(e){}
+}
+function persistBuddies(){
+  const book={};
+  for(const [nm,info] of Object.entries(offlineMap)){
+    book[nm.toLowerCase()]={nick:nm,color:info.color,at:info.at||Date.now()};
+  }
+  if(knownPeers){
+    for(const nm of knownPeers){
+      book[nm.toLowerCase()]={nick:nm,color:peerColors[nm]||colorFor(nm),at:Date.now()};
+    }
+  }
+  try{ localStorage.setItem('mirc_buddies', JSON.stringify(book)); }catch(e){}
+}
+function awayKey(n){ return String(n||'').toLowerCase(); }
+function isAwayNick(n){ return Object.prototype.hasOwnProperty.call(awayMap, awayKey(n)); }
+function setAwayNick(n, msg){
+  const k=awayKey(n);
+  if(msg==null || msg===false) delete awayMap[k];
+  else awayMap[k]=msg;
+}
+
 let listFilter='all'; // all|online|away|offline
 const groupOpen={online:true, away:true, offline:true};
 
@@ -441,8 +489,11 @@ function applyPresence(rawPeers){
   for(const p of peers){
     const nm=p.presence.nickname;
     names.add(nm);
-    if(p.presence.color) peerColors[nm]=p.presence.color;
-    if(offlineMap[nm]) delete offlineMap[nm];
+    if(p.presence.color && !colorLocked[nm]) peerColors[nm]=p.presence.color;
+    // drop from offline if they're here (any casing)
+    for(const k of Object.keys(offlineMap)){
+      if(sameNick(k,nm)) delete offlineMap[k];
+    }
   }
   if(knownPeers){
     for(const n of names){
@@ -460,16 +511,20 @@ function applyPresence(rawPeers){
     }
   }
   knownPeers=names;
+  persistBuddies();
+  persistColors();
   renderMembers(peers);
 }
 
 function nickRow(nm, col, state, isMe){
   const d=document.createElement('div');
   d.className='n'+(isMe?' me':'')+(state==='offline'?' offuser':'');
+  const st=state==='away'?'AWAY':(state==='offline'?'OFF':'ON');
+  const stcls=state==='away'?'aw':(state==='offline'?'off':'on');
   const mark=isMe?'@':(state==='away'?'-':(state==='offline'?'#':'+'));
-  d.innerHTML=`<span style="color:${esc(col||'#c0c0c0')}">${mark}${esc(nm)}</span>`;
-  if(state==='away' && awayMap[nm]) d.title='Away: '+awayMap[nm];
-  else if(state==='offline') d.title=nm+' is offline — click to IM';
+  d.innerHTML=`<span class="dot" style="background:${esc(col||'#c0c0c0')}"></span><span style="color:${esc(col||'#c0c0c0')}">${mark}${esc(nm)}</span><span class="st ${stcls}">${st}</span>`;
+  if(state==='away' && isAwayNick(nm)) d.title='Away: '+awayMap[awayKey(nm)];
+  else if(state==='offline') d.title=nm+' is not in chat';
   else d.title=isMe?'you (click to set away)':('Message '+nm);
   d.addEventListener('click', ()=>{
     if(isMe) openAwayDialog();
@@ -490,12 +545,14 @@ function renderMembers(peers){
     const col=(p.presence&&p.presence.color)||peerColors[nm]||colorFor(nm);
     peerColors[nm]=col;
     const rec={nm,col,isMe:!!p.isMe};
-    if(awayMap[nm]) { away.push(rec); counts.away++; }
+    if(isAwayNick(nm)) { away.push(rec); counts.away++; }
     else { online.push(rec); counts.online++; }
   }
+  const seenL=new Set([...seen].map(s=>s.toLowerCase()));
   for(const [nm,info] of Object.entries(offlineMap)){
-    if(seen.has(nm)) continue;
-    offline.push({nm,col:info.color||'#808080',isMe:false});
+    if(seenL.has(nm.toLowerCase())) continue;
+    seenL.add(nm.toLowerCase());
+    offline.push({nm,col:info.color||peerColors[nm]||'#808080',isMe:false});
     counts.offline++;
   }
   function mkTab(key, label, cls, n){
@@ -626,13 +683,13 @@ function incomingMessage(m){
 function appendMessage(m){
   const parsed=parseCtrl(m.text);
   if(parsed.kind==='away'){
-    awayMap[m.nick]=parsed.away;
+    setAwayNick(m.nick, parsed.away);
     addSys(m.nick+' is away'+(parsed.away?(': '+parsed.away):''));
     refreshList();
     return;
   }
   if(parsed.kind==='back'){
-    delete awayMap[m.nick];
+    setAwayNick(m.nick,null);
     addSys(m.nick+' is back');
     refreshList();
     return;
@@ -640,7 +697,9 @@ function appendMessage(m){
   if(parsed.kind==='color'){
     if(/^#[0-9a-fA-F]{6}$/.test(parsed.color||'')){
       peerColors[m.nick]=parsed.color;
-      if(m.nick===nick) myColor=parsed.color;
+      colorLocked[m.nick]=true;
+      persistColors();
+      if(sameNick(m.nick,nick)) myColor=parsed.color;
       if(knownPeers) renderMembers([...(knownPeers||[])].map(n=>({presence:{nickname:n,color:peerColors[n]}, isMe:n===nick})));
     }
     return;
@@ -710,12 +769,12 @@ function closeAwayDialog(){ document.getElementById('awayModal').style.display='
 function setAway(msg){
   myAway=(msg||'').trim();
   if(myAway){
-    awayMap[nick]=myAway;
+    setAwayNick(nick,myAway);
     sendMessage('[[CTRL:AWAY]]'+myAway);
     addSys('you are now away: '+myAway);
     document.getElementById('statusLeft').textContent=`Status: ${nick} AWAY on #0p72-1rc`;
   } else {
-    delete awayMap[nick];
+    setAwayNick(nick,null);
     sendMessage('[[CTRL:BACK]]');
     addSys('you are back');
     document.getElementById('statusLeft').textContent=`Status: ${nick} on #0p72-1rc (connected)`;
@@ -724,11 +783,17 @@ function setAway(msg){
   if(knownPeers) renderMembers([...(knownPeers||[])].map(n=>({presence:{nickname:n,color:peerColors[n]}, isMe:n===nick})));
 }
 
+function dmKey(who){
+  const want=String(who||'');
+  for(const k of Object.keys(dmWins)){ if(sameNick(k,want)) return k; }
+  return want;
+}
 function openDM(who){
-  if(!who || who===nick) return;
+  if(!who || sameNick(who,nick)) return;
   ensureDM(who, true);
 }
 function ensureDM(who, focus){
+  who=dmKey(who);
   if(dmWins[who]){
     dmWins[who].style.zIndex=++dmZ;
     if(focus) dmWins[who].querySelector('input').focus();
@@ -750,7 +815,9 @@ function ensureDM(who, focus){
     const t=inp.value.trim();
     if(!t) return;
     inp.value='';
-    sendMessage('[[CTRL:DM|'+who+']]'+t);
+    const packed='[[CTRL:DM|'+who+']]'+t;
+    sendMessage(packed);
+    appendToDM(who, {nick:nick, color:myColor||peerColors[nick], text:packed});
   };
   w.querySelector('button').addEventListener('click', send);
   inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') send(); });
@@ -773,6 +840,9 @@ function ensureDM(who, focus){
 function appendToDM(who, m){
   const w=ensureDM(who, false);
   const box=w.querySelector('.dmlog');
+  const sig=(m.nick||'')+'|'+(m.text||'');
+  if(box.dataset.last===sig) return;
+  box.dataset.last=sig;
   const {el}=lineEl(m);
   box.appendChild(el);
   box.scrollTop=box.scrollHeight;
@@ -1062,7 +1132,7 @@ function pickNameColor(c){
   if(c[0]!=='#') c='#'+c;
   if(/^#[0-9a-fA-F]{3}$/.test(c)) c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];
   myColor=c;
-  if(nick) peerColors[nick]=c;
+  if(nick){ peerColors[nick]=c; colorLocked[nick]=true; persistColors(); }
   const a=document.getElementById('nickColorInput'); if(a) a.value=c;
   const b=document.getElementById('colorCustom'); if(b) b.value=c;
   const pv=document.getElementById('nickColorPreview'); if(pv) pv.style.background=c;
