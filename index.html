@@ -294,6 +294,33 @@ function renderMessages(msgs){
 }
 
 
+let knownPeers=null; // null = first snapshot, don't ding everyone
+
+function applyPresence(rawPeers){
+  const peers=(rawPeers||[]).map(p=>({presence:p, isMe:p.nickname===nick}));
+  const names=new Set();
+  for(const p of peers){
+    const nm=(p.presence&&p.presence.nickname)?p.presence.nickname:'guest';
+    names.add(nm);
+  }
+  if(knownPeers){
+    for(const n of names){
+      if(n!==nick && !knownPeers.has(n)){
+        addSys(n+' has joined #0p72-1rc');
+        playLoginSound();
+      }
+    }
+    for(const n of knownPeers){
+      if(n!==nick && !names.has(n)){
+        addSys(n+' has left #0p72-1rc');
+        playLogoutSound();
+      }
+    }
+  }
+  knownPeers=names;
+  renderMembers(peers);
+}
+
 function renderMembers(peers){
   memberList.innerHTML='';
   if(!peers.length){ memberList.innerHTML='<div class="n">(just you)</div>'; return; }
@@ -352,7 +379,7 @@ function connectWebSocket(){
       const rows = log.querySelectorAll('.line').length; // cheap append instead of full re-render
       appendMessage(data.message);
     } else if(data.type === 'presence'){
-      renderMembers((data.peers||[]).map(p=>({presence:p, isMe:p.nickname===nick})));
+      applyPresence(data.peers||[]);
     }
   });
 
@@ -702,6 +729,7 @@ function signOff(){
   log.innerHTML='';
   myAway='';
   for(const k of Object.keys(awayMap)) delete awayMap[k];
+  knownPeers=null;
   for(const k of Object.keys(dmWins)){ try{dmWins[k].remove();}catch(e){} delete dmWins[k]; }
 }
 
