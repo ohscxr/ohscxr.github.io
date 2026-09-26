@@ -495,14 +495,15 @@ function playWin98(id){
   try{ a.muted=false; a.currentTime=0; a.volume=Math.max(0.35, dmVolume||0.8); const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
 }
 function armSounds(){
-  ['w98start','welcomeSound','loginSound','msgSound'].forEach(id=>{
+  ['w98start','welcomeSound','loginSound'].forEach(id=>{
     const a=document.getElementById(id);
     if(!a) return;
     try{
-      a.muted=true;
+      a.muted=false;
+      a.volume=Math.max(0.5, dmVolume||0.85);
+      a.currentTime=0;
       const p=a.play();
-      const stop=()=>{ try{ a.pause(); a.currentTime=0; a.muted=false; }catch(e){} };
-      if(p&&p.then) p.then(stop).catch(stop); else stop();
+      if(p&&p.catch) p.catch(()=>{});
     }catch(e){}
   });
 }
@@ -1916,17 +1917,31 @@ function openFlash(startId){
   stage.style.cssText='width:100%;height:360px;min-height:240px;background:#000;border:2px inset #404040;';
   wrap.appendChild(stage);
   function playMedia(url, kind){
-    stage.innerHTML='';
-    if(kind==='video'){
-      const v=document.createElement('video');
-      v.controls=true; v.autoplay=true; v.src=url;
-      v.style.cssText='width:100%;height:100%;background:#000;';
-      v.onerror=()=>{ stage.innerHTML='<div style="color:#f66;padding:12px;">video failed</div>'; };
-      stage.appendChild(v); return;
-    }
-    const a=document.createElement('audio');
-    a.controls=true; a.autoplay=true; a.src=url; a.style.cssText='width:96%;margin:24px 2%;';
-    stage.appendChild(a);
+    stage.innerHTML='<div style="color:#0f0;padding:8px;font:12px Courier New;">fetching…</div>';
+    fetch(url).then(r=>{
+      if(!r.ok) throw new Error('http '+r.status);
+      return r.blob();
+    }).then(blob=>{
+      const obj=URL.createObjectURL(blob);
+      stage.innerHTML='';
+      if(kind==='video'){
+        const v=document.createElement('video');
+        v.controls=true; v.autoplay=true; v.src=obj;
+        v.style.cssText='width:100%;height:100%;background:#000;';
+        v.onerror=()=>{ const fr=document.createElement('iframe'); fr.src=url; fr.style.cssText='width:100%;height:100%;border:0;'; stage.innerHTML=''; stage.appendChild(fr); };
+        stage.appendChild(v);
+      } else {
+        const a=document.createElement('audio');
+        a.controls=true; a.autoplay=true; a.src=obj; a.style.cssText='width:96%;margin:24px 2%;';
+        stage.appendChild(a);
+      }
+    }).catch(()=>{
+      const fr=document.createElement('iframe');
+      fr.src=url;
+      fr.style.cssText='width:100%;height:100%;border:0;background:#000;';
+      fr.allow='autoplay';
+      stage.innerHTML=''; stage.appendChild(fr);
+    });
   }
   function loadSwf(url){
     stage.innerHTML='<div style="color:#0f0;padding:10px;font:12px Courier New;">loading flash…</div>';
@@ -2004,6 +2019,27 @@ function tickDeskClock(){
   const t=()=>{ el.textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
   t(); setInterval(t,15000);
 }
+function openAdPopups(){
+  const ads=[
+    {t:'FREE AOL 4.0 CD', b:'50 HOURS FREE! Call 1-800-DIAL-AOL<br>Operators are standing by.'},
+    {t:'WIN A PENTIUM III', b:'You are visitor 1,000,000! Click YES to claim your prize.'},
+    {t:'HotOrNot 1999', b:'Meet singles in your area code. 56k recommended.'},
+    {t:'Yahoo! Auctions', b:'Beanie Babies ending SOON. Bid now!!!'},
+    {t:'Get Paid To Surf', b:'Install this toolbar. Your modem will thank you.'}
+  ];
+  const n=2+Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++){
+    const ad=ads[i%ads.length];
+    const inner=document.createElement('div');
+    inner.style.cssText='padding:8px;font:12px Tahoma;background:#000080;color:#fff;min-height:90px;';
+    inner.innerHTML='<div style="font-size:16px;color:#ff0;margin-bottom:8px;">'+ad.t+'</div><div>'+ad.b+'</div><div style="margin-top:10px;"><button class="send">YES</button> <button class="send">NO</button></div>';
+    const box=makeApp(ad.t, 280, 0, inner);
+    inner.querySelectorAll('button').forEach(btn=>btn.onclick=()=>box.remove());
+    box.style.left=(20+i*36)+'px';
+    box.style.top=(40+i*28)+'px';
+    box.style.zIndex=String(80+i);
+  }
+}
 function openAIM(){
   const w=document.getElementById('aimWin');
   if(w){
@@ -2011,6 +2047,7 @@ function openAIM(){
     w.style.left='8vw'; w.style.top='6vh'; w.style.width='min(840px,84vw)';
     if(!w.dataset.drag){ enableMoveResize(w, w.querySelector('.titlebar')); w.dataset.drag='1'; }
   }
+  openAdPopups();
   const s=document.getElementById('signon');
   if(s) s.style.display='block';
   const ni=document.getElementById('nickInput');
@@ -2188,6 +2225,8 @@ async function enterRoom(){
   try{
     await runDialupSequence();
     playWin98('w98start');
+    playWin98('welcomeSound');
+    playWin98('loginSound');
     await playWelcomeSound();
     await playLoginSound();
     addSys(nick+' signed on');
