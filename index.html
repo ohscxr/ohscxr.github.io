@@ -123,12 +123,60 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 #boot{display:none;position:fixed;inset:0;z-index:2147483647;background:#000;color:#c0c0c0;font-family:'Courier New',monospace;padding:18px;font-size:14px;white-space:pre-wrap;}
 #boot .bar{width:240px;height:16px;border:1px solid #c0c0c0;margin-top:12px;}
 #boot .bar>i{display:block;height:100%;width:0;background:#00a;}
+
+#w98boot{position:fixed;inset:0;z-index:2147483000;background:#000;color:#c0c0c0;font-family:'Courier New',monospace;padding:16px;font-size:14px;white-space:pre-wrap;display:block;}
+#w98boot .logo{margin-top:12vh;text-align:center;font-family:Tahoma,Arial,sans-serif;color:#fff;}
+#w98boot .logo h1{font-size:42px;margin:0;letter-spacing:2px;text-shadow:3px 3px 0 #000080;}
+#w98boot .logo .sub{color:#8080ff;margin-top:4px;}
+#w98boot .barwrap{width:260px;height:18px;border:2px inset #808080;margin:16px auto;background:#000;}
+#w98boot .barwrap i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,#000080 0 10px,#1084d0 10px 12px);}
+#w98logon{display:none;position:fixed;inset:0;z-index:2147483001;background:#008080;font-family:Tahoma,Arial,sans-serif;}
+#w98logon .box{width:340px;margin:18vh auto 0;background:#c0c0c0;border:2px solid #fff;border-right-color:#404040;border-bottom-color:#404040;box-shadow:4px 4px 10px #000;}
+#w98logon .ttl{background:linear-gradient(90deg,#000080,#1084d0);color:#fff;font-weight:bold;font-size:13px;padding:4px 6px;}
+#w98logon .bd{padding:12px;}
+#w98logon .users{max-height:140px;overflow:auto;background:#fff;border:2px inset #808080;margin:6px 0 10px;}
+#w98logon .u{padding:5px 8px;cursor:pointer;font-size:13px;}
+#w98logon .u:hover,#w98logon .u.sel{background:#000080;color:#fff;}
+#w98logon label{font-size:12px;display:block;margin-top:6px;}
+#w98logon input{width:100%;box-sizing:border-box;border:2px inset #808080;padding:4px;font-family:Tahoma;}
+#w98logon .row{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
 ::-webkit-scrollbar{width:14px;}
 ::-webkit-scrollbar-track{background:#ddd;}
 ::-webkit-scrollbar-thumb{background:var(--win);border:2px outset #fff;}
 </style>
 </head>
 <body>
+<div id="w98boot">AMI BIOS (C)1998 American Megatrends Inc.
+Pentium II CPU at 350MHz
+Memory Test : <span id="w98mem">0</span>K OK
+
+Detecting IDE Primary Master  ... IBM-DTTA-350840
+Detecting IDE Primary Slave   ... None
+Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
+
+<div class="logo" id="w98logo" style="display:none">
+<h1>Windows 98</h1>
+<div class="sub">Starting...</div>
+<div class="barwrap"><i id="w98bar"></i></div>
+</div>
+</div>
+<div id="w98logon">
+  <div class="box">
+    <div class="ttl">Enter Network Password</div>
+    <div class="bd">
+      <div style="font-size:12px;">Welcome to Windows. Select a user:</div>
+      <div class="users" id="w98users"></div>
+      <label>User name</label>
+      <input id="w98user" maxlength="32" placeholder="type a new name">
+      <label>Color</label>
+      <input id="w98color" type="color" value="#4aa3ff" style="width:60px;height:22px;padding:0;">
+      <div class="row">
+        <button class="send" id="w98ok">OK</button>
+        <button class="send" id="w98new">New User</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="win">
   <div class="titlebar"><span class="ic">💻</span><span id="titleText">mIRC32 - [#0p72-1rc]</span><span class="btns"><span id="minBtn">_</span><span id="maxBtn">▢</span><span id="logoutBtn" title="Sign Off">✕</span></span></div>
   <div class="menubar"><span>File</span><span>Tools</span><span>DCC</span><span>Commands</span><span>Window</span><span>Help</span></div>
@@ -142,7 +190,7 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
     <div class="info"><div class="chan">#0p72-1rc</div><div class="topic">k33p 7h3 57r3375 und3r6r0und</div></div>
   </div>
 
-  <div id="signon">
+  <div id="signon" style="display:none;">
     <div class="lg">⚡ mIRC Chat ⚡</div>
     <p>*** Connecting to server...<br>Pick a nickname to join #0p72-1rc</p>
     <input id="nickInput" maxlength="32" placeholder="nickname ($ ok)" autocomplete="off">
@@ -694,14 +742,6 @@ function connectWebSocket(){
     if(data.type === 'history'){
       prevMsgCount = (data.messages||[]).length;
       renderMessages(data.messages||[]);
-      const own=ownerOf(nick);
-      if(own && own!==myUid){
-        addSys('username already registered to someone else');
-        const err=document.getElementById('nickErr');
-        signOff();
-        if(err) err.textContent='that username is already taken';
-        return;
-      }
       claimNick(nick, myUid);
       saveProfile();
     } else if(data.type === 'message'){
@@ -890,16 +930,16 @@ function incomingMessage(m){
   if(!m) return;
   if(typeof m==='string') m={nick:'?', color:'#c0c0c0', text:m};
   const rawt=msgText(m);
-  const forMe=sameNick(m.nick,nick) || sameNick(parsed.to,nick);
-  if(/pirate/i.test(rawt)) startPirate();
-  else if(/kirbydance/i.test(rawt)) startKirbyDance();
-  else if(isRickText(msgText(m)) && (forMe)) startRickroll();
+  if(/(^|\s)\/?pirate\b/i.test(rawt) || /limewire/i.test(rawt)) startPirate();
+  else if(/kirbydance|\/kirby\b/i.test(rawt)) startKirbyDance();
+  else if(isRickText(rawt) && !/^\//.test(rawt.trim())) startRickroll();
   const parsed=parseCtrl(rawt);
   const isCtrl=['away','back','color','reg'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
   if(myAway){ appendMessage(m); return; }
   if(isCtrl){ appendMessage(m); return; }
   if(isDm){
+    const forMe=sameNick(m.nick,nick) || sameNick(parsed.to,nick);
     if(forMe) playDmSound();
     appendMessage(m);
     return;
@@ -934,10 +974,6 @@ function appendMessage(m){
   }
   if(parsed.kind==='reg'){
     if(parsed.regNick && parsed.regUid){
-      const prev=ownerOf(parsed.regNick);
-      if(prev && prev!==parsed.regUid && parsed.regNick.toLowerCase()=== (nick||'').toLowerCase() && parsed.regUid!==myUid){
-        addSys('nickname in use by another account — pick a different name');
-      }
       claimNick(parsed.regNick, parsed.regUid);
     }
     return;
@@ -1138,6 +1174,90 @@ async function sendMessage(text){
   }
 }
 
+async function runWin98Boot(){
+  const boot=document.getElementById('w98boot');
+  const logon=document.getElementById('w98logon');
+  const sign=document.getElementById('signon');
+  const mem=document.getElementById('w98mem');
+  const logo=document.getElementById('w98logo');
+  const bar=document.getElementById('w98bar');
+  if(!boot){ if(sign) sign.style.display='block'; return; }
+  for(let k=0;k<=65536;k+=2048){
+    if(mem) mem.textContent=String(k);
+    await new Promise(r=>setTimeout(r,25));
+  }
+  await new Promise(r=>setTimeout(r,400));
+  if(logo) logo.style.display='block';
+  for(let p=0;p<=100;p+=2){
+    if(bar) bar.style.width=p+'%';
+    await new Promise(r=>setTimeout(r,30));
+  }
+  await new Promise(r=>setTimeout(r,400));
+  boot.style.display='none';
+  fillW98Users();
+  if(logon) logon.style.display='block';
+}
+function fillW98Users(){
+  const box=document.getElementById('w98users');
+  if(!box) return;
+  box.innerHTML='';
+  const names=[];
+  try{
+    const s=JSON.parse(localStorage.getItem('mirc_profile')||'null');
+    if(s && s.nick) names.push(s.nick);
+  }catch(e){}
+  try{
+    const b=JSON.parse(localStorage.getItem('mirc_buddies')||'{}');
+    for(const v of Object.values(b||{})){
+      if(v && v.nick && !names.some(n=>n.toLowerCase()===v.nick.toLowerCase())) names.push(v.nick);
+    }
+  }catch(e){}
+  if(!names.length) names.push('(new user)');
+  names.forEach((nm,i)=>{
+    const d=document.createElement('div');
+    d.className='u'+(i===0?' sel':'');
+    d.textContent=nm;
+    d.addEventListener('click', ()=>{
+      box.querySelectorAll('.u').forEach(x=>x.classList.remove('sel'));
+      d.classList.add('sel');
+      if(nm!=='(new user)'){
+        document.getElementById('w98user').value=nm;
+        document.getElementById('nickInput').value=nm;
+      }
+    });
+    box.appendChild(d);
+  });
+  const first=names[0]!=='(new user)'?names[0]:'';
+  if(first){
+    document.getElementById('w98user').value=first;
+    document.getElementById('nickInput').value=first;
+  }
+}
+function finishW98Logon(asNew){
+  const name=(document.getElementById('w98user').value||'').trim();
+  const col=document.getElementById('w98color').value||'#4aa3ff';
+  if(name){
+    document.getElementById('nickInput').value=name;
+    const ci=document.getElementById('nickColorInput');
+    if(ci) ci.value=col;
+    const pv=document.getElementById('nickColorPreview');
+    if(pv) pv.style.background=col;
+  }
+  document.getElementById('w98logon').style.display='none';
+  document.getElementById('signon').style.display='block';
+  if(name && !asNew){
+    // stay on mIRC connect so they can hit Connect / dialup
+    document.getElementById('nickInput').focus();
+  }
+}
+document.getElementById('w98ok').addEventListener('click', ()=>finishW98Logon(false));
+document.getElementById('w98new').addEventListener('click', ()=>{
+  document.getElementById('w98user').value='';
+  document.getElementById('w98user').focus();
+});
+document.getElementById('w98user').addEventListener('keydown', e=>{ if(e.key==='Enter') finishW98Logon(false); });
+runWin98Boot();
+
 document.getElementById('enterBtn').addEventListener('click', enterRoom);
 document.getElementById('nickInput').addEventListener('keydown', e=>{ if(e.key==='Enter') enterRoom(); });
 
@@ -1244,11 +1364,6 @@ async function enterRoom(){
   if(val.length<2){ document.getElementById('nickErr').textContent='too short'; return; }
   if(/\s/.test(val) || /\[\[/.test(val)){ document.getElementById('nickErr').textContent='no spaces'; return; }
   if(!/^[\x21-\x7E\u00A0-\uFFFD]+$/.test(val)){ document.getElementById('nickErr').textContent='invalid characters'; return; }
-  const takenBy=ownerOf(val);
-  if(takenBy && takenBy!==myUid){
-    document.getElementById('nickErr').textContent='that username is already taken';
-    return;
-  }
   nick=val;
   const picked=document.getElementById('nickColorInput');
   myColor=(picked && picked.value) ? picked.value : colorFor(nick);
@@ -1327,6 +1442,24 @@ function doSend(){
   let text=inp.value.trim();
   if(!text) return;
   inp.value='';
+  const low=text.toLowerCase();
+  const rawcmd=low.startsWith('/') ? low.slice(1) : low;
+  const verb=rawcmd.split(/\s+/)[0];
+  if(verb==='clear' || verb==='cls'){
+    if(log) log.innerHTML='';
+    addSys('buffer cleared');
+    return;
+  }
+  if(verb==='kirbydance' || verb==='kirby' || verb==='dance'){
+    sendMessage('/kirbydance');
+    startKirbyDance();
+    return;
+  }
+  if(verb==='pirate' || verb==='limewire' || verb==='lime'){
+    sendMessage('/pirate');
+    startPirate();
+    return;
+  }
   if(text.toLowerCase().startsWith('/away')){
     setAway(text.slice(5).trim());
     return;
