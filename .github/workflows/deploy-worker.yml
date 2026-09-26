@@ -1,5 +1,5 @@
 name: Deploy Cloudflare Worker
-
+ 
 # Runs whenever worker.js or wrangler.toml change on main.
 # Adjust the paths/branch below if your setup differs.
 on:
@@ -10,14 +10,22 @@ on:
       - "worker.js"
       - "wrangler.toml"
   workflow_dispatch: {}
-
+ 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
+ 
+      # TEMPORARY DEBUG STEP — remove once the token issue is resolved.
+      # Prints only the length of the secret, never the value itself.
+      - name: Debug - check token length
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "Token length: ${#CLOUDFLARE_API_TOKEN}"
+ 
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
