@@ -1272,11 +1272,11 @@ function youveGotMail(){
   try{
     if(window.speechSynthesis){
       const u=new SpeechSynthesisUtterance("You've got mail");
-      u.rate=0.95; u.pitch=1; u.volume=Math.max(0.3, dmVolume||0.8);
+      u.rate=0.92; u.pitch=1.05; u.volume=Math.max(0.5, dmVolume||0.9);
       speechSynthesis.cancel(); speechSynthesis.speak(u);
     }
   }catch(e){}
-  playLoginSound();
+  playWindowsLogonTone();
   refreshMailBadge();
 }
 function sendMail(to, subj, body){
@@ -1318,7 +1318,8 @@ function openMailbox(){
   };
   draw();
   makeApp('Mailbox', 360, 0, wrap);
-  refreshMailBadge();
+  if(unreadMail()) youveGotMail();
+  else refreshMailBadge();
 }
 
 function incomingMessage(m){
@@ -1660,6 +1661,8 @@ function finishW98Logon(asNew){
   document.getElementById('w98logon').style.display='none';
   document.getElementById('desktop').style.display='block';
   tickDeskClock();
+  playWindowsLogonTone();
+  playWin98('w98start');
 }
 document.getElementById('w98ok').addEventListener('click', ()=>finishW98Logon(false));
 document.getElementById('w98new').addEventListener('click', ()=>{
@@ -2228,15 +2231,11 @@ async function enterRoom(){
   claimNick(nick, myUid);
   saveProfile();
   connecting=true;
-  armSounds();
   document.getElementById('nickErr').textContent='';
   document.getElementById('enterBtn').disabled=true;
   document.getElementById('signon').style.display='none';
   try{
     await runDialupSequence();
-    playWin98('w98start');
-    playWin98('welcomeSound');
-    playWin98('loginSound');
     await playWelcomeSound();
     await playLoginSound();
     addSys(nick+' signed on');
