@@ -1082,7 +1082,6 @@ function ensureDM(who, focus){
     inp.value='';
     const packed='[[CTRL:DM|'+who+']]'+t;
     sendMessage(packed);
-    appendToDM(who, {nick:nick, color:myColor||peerColors[nick], text:packed});
   };
   w.querySelector('button').addEventListener('click', send);
   inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') send(); });
@@ -1436,7 +1435,7 @@ document.getElementById('logoutBtn').addEventListener('click', signOff);
   });
 })();
 document.getElementById('sendBtn').addEventListener('click', doSend);
-document.getElementById('msgInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doSend(); });
+document.getElementById('msgInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doSend(); }});
 function doSend(){
   const inp=document.getElementById('msgInput');
   let text=inp.value.trim();
