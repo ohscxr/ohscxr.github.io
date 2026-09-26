@@ -32,4 +32,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           # Uncomment and set this if your Cloudflare account has more than
           # one account/zone and Wrangler can't infer which to use:
-          # accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
