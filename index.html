@@ -32,7 +32,9 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 #log{flex:1;overflow-y:auto;background:var(--logbg);padding:6px 8px;font-family:'Courier New',monospace;font-size:13px;color:var(--logtext);}
 #log .line{margin-bottom:2px;white-space:pre-wrap;word-break:break-word;}
 #log .sys{color:var(--sys);}
-.nicklist{width:168px;background:#fff;border-left:1px solid var(--border-mid);overflow-y:auto;font-family:'Courier New',monospace;font-size:12px;padding:0;display:flex;flex-direction:column;}
+.vollab{display:flex;align-items:center;gap:3px;font-size:10px;margin:0 4px;white-space:nowrap;}
+.vollab input{width:70px;}
+.nicklist{width:178px;background:#fff;border-left:1px solid var(--border-mid);overflow-y:auto;font-family:'Courier New',monospace;font-size:12px;padding:0;display:flex;flex-direction:column;}
 .nicklist .tabs{display:flex;border-bottom:1px solid var(--border-mid);flex-shrink:0;}
 .nicklist .tab{flex:1;text-align:center;font-size:9px;font-weight:bold;padding:4px 1px;cursor:pointer;border-right:1px solid var(--border-mid);letter-spacing:0;}
 .nicklist .tab:last-child{border-right:0;}
@@ -153,6 +155,9 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
     <button class="ibtn" id="imgBtn" title="Send picture">🖼</button>
     <button class="ibtn" id="awayBtn" title="Set away">zZz</button>
     <button class="ibtn" id="colorBtn" title="Name color">🎨</button>
+    <label class="vollab" title="DM volume">DM
+      <input id="dmVolIn" type="range" min="0" max="100" value="80">
+    </label>
     <input id="msgInput" placeholder="" autocomplete="off">
     <button class="send" id="sendBtn">Send</button>
     <div id="colorPop">
@@ -243,10 +248,32 @@ const keySoundEl=document.getElementById('keySound');
 let prevMsgCount=null;
 let dmVolume=0.8;
 try{ const v=localStorage.getItem('mirc_dmvol'); if(v!==null) dmVolume=Math.max(0,Math.min(1,Number(v)/100)); }catch(e){}
-function playMsgSound(){ try{ msgSoundEl.volume=1; msgSoundEl.currentTime=0; msgSoundEl.play().catch(()=>{}); }catch(e){} }
+function setDmVolume(pct){
+  const n=Math.max(0,Math.min(100, Number(pct)));
+  if(Number.isNaN(n)) return;
+  dmVolume=n/100;
+  try{ localStorage.setItem('mirc_dmvol', String(n)); }catch(e){}
+  const sl=document.getElementById('dmVol');
+  const sl2=document.getElementById('dmVolIn');
+  const lbl=document.getElementById('dmVolLbl');
+  if(sl && sl.value!==String(n)) sl.value=String(n);
+  if(sl2 && sl2.value!==String(n)) sl2.value=String(n);
+  if(lbl) lbl.textContent=n+'%';
+}
+function playMsgSound(){
+  try{
+    const a=msgSoundEl.cloneNode(true);
+    a.volume=1;
+    a.play().catch(()=>{});
+  }catch(e){}
+}
 function playDmSound(){
   if(dmVolume<=0) return;
-  try{ msgSoundEl.volume=dmVolume; msgSoundEl.currentTime=0; msgSoundEl.play().catch(()=>{}); }catch(e){}
+  try{
+    const a=msgSoundEl.cloneNode(true);
+    a.volume=dmVolume;
+    a.play().catch(()=>{});
+  }catch(e){}
 }
 function playLoginSound(){ try{ loginSoundEl.currentTime=0; loginSoundEl.play().catch(()=>{}); }catch(e){} }
 function playKeySound(){ try{ const c=keySoundEl.cloneNode(true); c.play().catch(()=>{}); c.addEventListener('ended', ()=>c.remove()); }catch(e){} }
@@ -267,16 +294,16 @@ let myAway="";
 const dmWins={};
 let dmZ=60;
 
+function sameNick(a,b){ return String(a||'').toLowerCase()===String(b||'').toLowerCase(); }
+
 function parseCtrl(text){
   text=text||'';
   const out={kind:'text', text, to:null, img:null, away:null};
-  if(text.startsWith('[[CTRL:DM|')){
-    const i=text.indexOf(']]');
-    if(i>0){
-      out.kind='dm';
-      out.to=text.slice(10,i);
-      text=text.slice(i+2);
-    }
+  const dm=text.match(/^\[\[CTRL:DM\|([^\]]+)\]\]/i);
+  if(dm){
+    out.kind='dm';
+    out.to=dm[1].trim();
+    text=text.slice(dm[0].length);
   }
   if(text.startsWith('[[CTRL:AWAY]]')){
     out.kind='away';
@@ -330,7 +357,8 @@ function lineEl(m, extraCls){
   const d=document.createElement('div');
   d.className='line'+(extraCls?(' '+extraCls):'');
   const parsed=parseCtrl(m.text);
-  const head=`<span style="color:${esc(m.color||'#c0c0c0')}">&lt;${esc(m.nick)}&gt;</span> `;
+  const col=peerColors[m.nick]||m.color||colorFor(m.nick||'')||'#c0c0c0';
+  const head=`<span style="color:${esc(col)}">&lt;${esc(m.nick)}&gt;</span> `;
   if(parsed.kind==='img' || parsed.kind==='dm-img'){
     const src=parsed.img||'';
     if(isGoodImgSrc(src)){
@@ -374,9 +402,10 @@ function renderMessages(msgs){
         continue;
       }
       if(parsed.kind==='dm' || parsed.kind==='dm-img'){
-        if(m.nick===nick || parsed.to===nick){
-          ensureDM(m.nick===nick?parsed.to:m.nick, false);
-          appendToDM(m.nick===nick?parsed.to:m.nick, m);
+        if(sameNick(m.nick,nick) || sameNick(parsed.to,nick)){
+          const other=sameNick(m.nick,nick)?parsed.to:m.nick;
+          ensureDM(other, false);
+          appendToDM(other, m);
         }
         continue;
       }
@@ -395,13 +424,24 @@ const offlineMap={};
 let listFilter='all'; // all|online|away|offline
 const groupOpen={online:true, away:true, offline:true};
 
+function refreshList(){
+  if(!knownPeers){ return; }
+  const peers=[...knownPeers].map(n=>({presence:{nickname:n,color:peerColors[n]||colorFor(n)}, isMe:sameNick(n,nick)}));
+  renderMembers(peers);
+}
+
 function applyPresence(rawPeers){
-  const peers=(rawPeers||[]).map(p=>({presence:p, isMe:p.nickname===nick}));
+  const peers=(rawPeers||[]).map(p=>{
+    const src=p && p.nickname ? p : (p && p.presence ? p.presence : p);
+    const nm=(src && (src.nickname||src.nick||src.name)) || 'guest';
+    const col=(src && src.color) || peerColors[nm] || colorFor(nm);
+    return {presence:{nickname:nm,color:col}, isMe:sameNick(nm,nick)};
+  });
   const names=new Set();
   for(const p of peers){
-    const nm=(p.presence&&p.presence.nickname)?p.presence.nickname:'guest';
+    const nm=p.presence.nickname;
     names.add(nm);
-    if(p.presence&&p.presence.color) peerColors[nm]=p.presence.color;
+    if(p.presence.color) peerColors[nm]=p.presence.color;
     if(offlineMap[nm]) delete offlineMap[nm];
   }
   if(knownPeers){
@@ -550,6 +590,13 @@ function connectWebSocket(){
 
   ws.addEventListener('close', ()=>{
     wsReady = false;
+    if(knownPeers){
+      for(const n of knownPeers){
+        if(!sameNick(n,nick)) offlineMap[n]={color:peerColors[n]||'#808080', at:Date.now()};
+      }
+    }
+    knownPeers=null;
+    refreshList();
     document.getElementById('statusLeft').textContent = `Status: ${nick} on #0p72-1rc (disconnected)`;
     addSys('disconnected — reconnecting in a moment...');
     clearTimeout(reconnectTimer);
@@ -564,15 +611,15 @@ function incomingMessage(m){
   const parsed=parseCtrl(m.text);
   const isCtrl=['away','back','color','reg'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
-  const silenced=!!myAway;
-  if(!silenced && prevMsgCount!==null){
-    if(isDm){
-      const forMe=(m.nick===nick || parsed.to===nick);
-      if(forMe) playDmSound();
-    } else if(!isCtrl){
-      playMsgSound();
-    }
+  if(myAway){ appendMessage(m); return; }
+  if(isCtrl){ appendMessage(m); return; }
+  if(isDm){
+    const forMe=sameNick(m.nick,nick) || sameNick(parsed.to,nick);
+    if(forMe) playDmSound();
+    appendMessage(m);
+    return;
   }
+  playMsgSound();
   appendMessage(m);
 }
 
@@ -581,12 +628,13 @@ function appendMessage(m){
   if(parsed.kind==='away'){
     awayMap[m.nick]=parsed.away;
     addSys(m.nick+' is away'+(parsed.away?(': '+parsed.away):''));
+    refreshList();
     return;
   }
   if(parsed.kind==='back'){
     delete awayMap[m.nick];
     addSys(m.nick+' is back');
-    if(knownPeers) renderMembers([...(knownPeers||[])].map(n=>({presence:{nickname:n,color:peerColors[n]}, isMe:n===nick})));
+    refreshList();
     return;
   }
   if(parsed.kind==='color'){
@@ -608,8 +656,8 @@ function appendMessage(m){
     return;
   }
   if(parsed.kind==='dm' || parsed.kind==='dm-img'){
-    const other = m.nick===nick ? parsed.to : m.nick;
-    if(m.nick===nick || parsed.to===nick){
+    if(sameNick(m.nick,nick) || sameNick(parsed.to,nick)){
+      const other=sameNick(m.nick,nick)?parsed.to:m.nick;
       openDM(other);
       appendToDM(other, m);
     }
@@ -963,15 +1011,13 @@ document.getElementById('logoutBtn').addEventListener('click', signOff);
   }catch(e){}
 })();
 (function initDmVol(){
-  const sl=document.getElementById('dmVol');
-  const lbl=document.getElementById('dmVolLbl');
-  if(!sl) return;
-  sl.value=String(Math.round(dmVolume*100));
-  if(lbl) lbl.textContent=sl.value+'%';
-  sl.addEventListener('input', ()=>{
-    dmVolume=Math.max(0,Math.min(1, Number(sl.value)/100));
-    if(lbl) lbl.textContent=sl.value+'%';
-    try{ localStorage.setItem('mirc_dmvol', sl.value); }catch(e){}
+  const pct=Math.round(dmVolume*100);
+  setDmVolume(pct);
+  ['dmVol','dmVolIn'].forEach(id=>{
+    const sl=document.getElementById(id);
+    if(!sl) return;
+    sl.addEventListener('input', ()=>setDmVolume(sl.value));
+    sl.addEventListener('change', ()=>setDmVolume(sl.value));
   });
 })();
 document.getElementById('sendBtn').addEventListener('click', doSend);
@@ -1013,17 +1059,20 @@ buildEmoGrid();
 })();
 function pickNameColor(c){
   if(!c) return;
+  if(c[0]!=='#') c='#'+c;
+  if(/^#[0-9a-fA-F]{3}$/.test(c)) c='#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3];
   myColor=c;
-  peerColors[nick]=c;
+  if(nick) peerColors[nick]=c;
   const a=document.getElementById('nickColorInput'); if(a) a.value=c;
   const b=document.getElementById('colorCustom'); if(b) b.value=c;
   const pv=document.getElementById('nickColorPreview'); if(pv) pv.style.background=c;
-  document.getElementById('colorPop').style.display='none';
-  if(ws && wsReady){
-    try{ ws.send(JSON.stringify({type:'join', nickname:nick, color:myColor})); }catch(e){}
+  const pop=document.getElementById('colorPop'); if(pop) pop.style.display='none';
+  saveProfile();
+  if(ws && wsReady && nick){
+    try{ ws.send(JSON.stringify({type:'join', nickname:nick, color:myColor, uid:myUid})); }catch(e){}
     sendMessage('[[CTRL:COLOR]]'+c);
   }
-  if(knownPeers) renderMembers([...(knownPeers||[])].map(n=>({presence:{nickname:n,color:peerColors[n]}, isMe:n===nick})));
+  refreshList();
 }
 
 document.getElementById('emoBtn').addEventListener('click', toggleEmo);
