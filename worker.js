@@ -58,7 +58,6 @@ export class ChatRoom {
       } catch (e) {
         return;
       }
- // Test
       if (data.type === "join") {
         const nickname = String(data.nickname || "guest").slice(0, 20);
         const color = String(data.color || "#c0c0c0").slice(0, 20);
