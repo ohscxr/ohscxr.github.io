@@ -182,6 +182,19 @@ body{background:var(--deskbg);font-family:Tahoma,Arial,sans-serif;display:flex;a
 .ico-run .leg{transform-origin:6px 14px;animation:legkick .28s infinite alternate;}
 @keyframes legkick{from{transform:rotate(-28deg)}to{transform:rotate(28deg)}}
 .aim-load{width:48px;height:48px;margin:8px auto;}
+
+#signon{background:var(--win)!important;color:#000!important;font-family:Tahoma,Arial,sans-serif!important;text-align:left!important;padding:14px 16px!important;}
+#signon .lg{color:#003399!important;font-size:16px!important;font-weight:bold;margin-bottom:10px;justify-content:flex-start!important;}
+#signon p{color:#000!important;font-size:12px!important;margin:0 0 10px!important;}
+#signon label.aiml{display:block;font-size:12px;margin:8px 0 2px;}
+#signon input[type=text],#signon input[type=password],#signon input[type=email],#nickInput{width:100%!important;max-width:none!important;background:#fff;color:#000;border:2px inset #808080;padding:4px;}
+#signon button{margin-top:12px!important;}
+#dialOverlay{padding:28px!important;}
+#dialOverlay .dialbox{width:92%!important;max-width:560px!important;min-height:220px;padding:16px 18px!important;font-size:13px!important;}
+#dialOverlay .aim-load{width:72px;height:72px;}
+#adstrip{display:none;height:64px;background:#000;border-top:1px solid #404040;overflow:hidden;}
+#adstrip .ad{height:60px;margin:2px auto;width:468px;max-width:96%;background:linear-gradient(90deg,#003399,#0066cc);color:#fff;font:bold 13px Tahoma;display:flex;align-items:center;justify-content:center;letter-spacing:.5px;border:1px solid #ff0;}
+#adstrip .ad b{color:#ff0;margin:0 6px;}
 ::-webkit-scrollbar{width:14px;}
 ::-webkit-scrollbar-track{background:#ddd;}
 ::-webkit-scrollbar-thumb{background:var(--win);border:2px outset #fff;}
@@ -248,29 +261,38 @@ Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
   </div>
 
   <div id="signon" style="display:none;">
-    <div class="lg" style="display:flex;align-items:center;justify-content:center;gap:8px;"><span id="signRun" style="width:28px;height:28px;display:inline-block;"></span>AOL Instant Messenger</div>
-    <p>Sign on to AIM<br>#0p72-1rc</p>
-    <input id="nickInput" maxlength="32" placeholder="nickname ($ ok)" autocomplete="off">
-    <div style="margin-top:8px;font-size:12px;color:#c0c0c0;">name color <span id="nickColorPreview"></span>
+    <div class="lg" style="display:flex;align-items:center;gap:8px;"><span id="signRun" style="width:48px;height:26px;display:inline-block;"></span>Sign On</div>
+    <p>AOL Instant Messenger</p>
+    <label class="aiml">Screen Name</label>
+    <input id="nickInput" maxlength="32" placeholder="" autocomplete="username">
+    <label class="aiml">Password</label>
+    <input id="aimPass" type="password" maxlength="32" placeholder="" autocomplete="current-password">
+    <label class="aiml">E-mail Address</label>
+    <input id="aimEmail" type="email" maxlength="64" placeholder="name@aol.com" autocomplete="email">
+    <label class="aiml" style="display:flex;align-items:center;gap:6px;margin-top:8px;"><input id="aimSave" type="checkbox" checked> Save password &amp; e-mail</label>
+    <div style="margin-top:8px;font-size:12px;">Buddy color <span id="nickColorPreview"></span>
       <input id="nickColorInput" type="color" value="#4aa3ff" style="margin-left:6px;width:32px;height:20px;vertical-align:middle;padding:0;border:1px solid #808080;">
     </div>
     <div class="err" id="nickErr"></div>
-    <div><button id="enterBtn">Connect</button></div>
+    <div style="text-align:right;"><button id="enterBtn">Sign On</button></div>
   </div>
 
 
   <div id="dialOverlay"><div class="aim-load" id="dialRun"></div>
     <div class="dialbox">
       <div class="ttl">Connect to America Online</div>
-      <div class="stat" id="dialStat" style="color:#000;min-height:16px;">Initializing modem...</div>
-      <div class="barwrap"><div class="bar" id="dialBar"></div></div>
+      <div style="font-size:12px;margin:0 0 10px;">Location: Home  ·  Network: AOL</div>
+      <div class="stat" id="dialStat" style="color:#000;min-height:18px;">Initializing modem...</div>
+      <div class="barwrap" style="height:28px;"><div class="bar" id="dialBar"></div></div>
       <div class="stat" id="dialPct" style="color:#000;text-align:center;">0%</div>
+      <div style="font-size:11px;margin-top:12px;color:#333;">Dialing… 1-800-AOL-NOW<br>Do not pick up the phone.</div>
     </div>
   </div>
   <div class="body" id="chatBody" style="display:none;">
     <div id="log"></div>
     <div class="nicklist" id="memberList"></div>
   </div>
+  <div id="adstrip"><div class="ad" id="fakeAd"><b>FREE*</b> AOL 4.0 CD — 50 hours! &nbsp; 1-800-DIAL-AOL</div></div>
   <div class="inputrow" id="inputRow" style="display:none;">
     <button class="ibtn" id="emoBtn" title="Emoticons">☺</button>
     <button class="ibtn" id="imgBtn" title="Send picture">🖼</button>
@@ -378,7 +400,11 @@ function loadOwners(){
 }
 loadOwners();
 function saveProfile(){
-  try{ localStorage.setItem('mirc_profile', JSON.stringify({nick, color:myColor, uid:myUid})); }catch(e){}
+  const em=(document.getElementById('aimEmail')||{}).value||'';
+  const pw=(document.getElementById('aimPass')||{}).value||'';
+  const saveEl=document.getElementById('aimSave');
+  const keep=saveEl?saveEl.checked:true;
+  try{ localStorage.setItem('mirc_profile', JSON.stringify({nick, color:myColor, uid:myUid, email:keep?em:'', pass:keep?pw:''})); }catch(e){}
 }
 function claimNick(n, uid){
   if(!n||!uid) return;
@@ -1929,6 +1955,22 @@ if(lg){ if(off){ lg.innerHTML=''; const i=document.createElement('img'); i.src=o
 const sr=document.getElementById('signRun');
 if(sr){ if(off){ sr.innerHTML=''; const i=document.createElement('img'); i.src=off.src; i.style.width='48px'; i.style.height='26px'; sr.appendChild(i);} else sr.innerHTML=svgIcon('run',28); }
 
+(function rotateAds(){
+  const lines=[
+    'FREE* AOL 4.0 CD — 50 hours!   1-800-DIAL-AOL',
+    'NEW from AOL: Bring Your Own Access — $9.95/mo',
+    'You\'ve Got Pictures! Store 50 photos FREE',
+    'NetHelp: keyword AIM   |   Parental Controls ON',
+    'Upgrade to AOL 5.0 — Now with Instant Messenger'
+  ];
+  let i=0;
+  setInterval(()=>{
+    const el=document.getElementById('fakeAd');
+    if(!el) return;
+    i=(i+1)%lines.length;
+    el.innerHTML='<b>AD</b> '+lines[i];
+  },8000);
+})();
 runWin98Boot();
 
 document.getElementById('enterBtn').addEventListener('click', enterRoom);
@@ -2023,6 +2065,7 @@ async function finishLoginUI(){
   document.getElementById('chatBody').style.display='flex';
   document.getElementById('inputRow').style.display='flex';
   document.getElementById('statusBar').style.display='flex';
+  const ads=document.getElementById('adstrip'); if(ads) ads.style.display='block';
   document.getElementById('titleText').textContent=`mIRC32 - [#0p72-1rc (${nick})]`;
   document.getElementById('statusLeft').textContent=`Status: ${nick} on #0p72-1rc`;
   const upd=()=>{document.getElementById('statusTime').textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});};
@@ -2040,6 +2083,8 @@ async function enterRoom(){
   if(val.length<2){ document.getElementById('nickErr').textContent='too short'; return; }
   if(/\s/.test(val) || /\[\[/.test(val)){ document.getElementById('nickErr').textContent='no spaces'; return; }
   if(!/^[\x21-\x7E\u00A0-\uFFFD]+$/.test(val)){ document.getElementById('nickErr').textContent='invalid characters'; return; }
+  const emEl=document.getElementById('aimEmail');
+  if(emEl && !emEl.value.trim()) emEl.value=val+'@aol.com';
   nick=val;
   const picked=document.getElementById('nickColorInput');
   myColor=(picked && picked.value) ? picked.value : colorFor(nick);
@@ -2071,6 +2116,7 @@ function signOff(){
   document.getElementById('chatBody').style.display='none';
   document.getElementById('inputRow').style.display='none';
   document.getElementById('statusBar').style.display='none';
+  const ads2=document.getElementById('adstrip'); if(ads2) ads2.style.display='none';
   document.getElementById('dialOverlay').style.display='none';
   document.getElementById('aimWin').style.display='none';
   document.getElementById('desktop').style.display='block';
@@ -2103,6 +2149,8 @@ document.getElementById('logoutBtn').addEventListener('click', signOff);
       if(ci && s.color) ci.value=s.color;
       const pv=document.getElementById('nickColorPreview');
       if(pv && s.color) pv.style.background=s.color;
+      const em=document.getElementById('aimEmail'); if(em && s.email) em.value=s.email;
+      const pw=document.getElementById('aimPass'); if(pw && s.pass) pw.value=s.pass;
     }
   }catch(e){}
 })();
