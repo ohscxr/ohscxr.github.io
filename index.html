@@ -494,7 +494,27 @@ function playWin98(id){
   if(!a) return;
   try{ a.muted=false; a.currentTime=0; a.volume=Math.max(0.35, dmVolume||0.8); const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
 }
+function playWindowsLogonTone(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==='suspended') ctx.resume();
+    const now=ctx.currentTime;
+    const notes=[523.25,659.25,783.99,1046.5];
+    notes.forEach((f,i)=>{
+      const o=ctx.createOscillator();
+      const g=ctx.createGain();
+      o.type='triangle';
+      o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.18, now+0.04+i*0.12);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+1.4);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now+i*0.12); o.stop(now+1.5);
+    });
+  }catch(e){}
+}
 function armSounds(){
+  playWindowsLogonTone();
   ['w98start','welcomeSound','loginSound'].forEach(id=>{
     const a=document.getElementById(id);
     if(!a) return;
@@ -1897,14 +1917,12 @@ function openQuake(){
 
 
 const MEMES=[
-  {id:'ayb', title:'All Your Base Are Belong To Us', type:'swf', src:'https://archive.org/download/flash_allyourbase/AYB2.swf'},
-  {id:'ham', title:'Hampster Dance', type:'swf', src:'https://archive.org/download/hamsterdance-hampster-slide_flash/Ham_Slid.swf'},
+  {id:'lime', title:'You Are A Pirate / LOL Limewire (local)', type:'local'},
   {id:'chip', title:'Dramatic Chipmunk', type:'video', src:'https://archive.org/download/dramaticchipmunk/Dramatic%20Chipmunk.mp4'},
-  {id:'lime', title:'You Are A Pirate / LOL Limewire', type:'local'},
   {id:'nyan', title:'Nyan Cat', type:'video', src:'https://archive.org/download/nyan-archive/Nyan%20Cat%20original%20_360P.mp4'},
-  {id:'nyanfly', title:'Nyan Cat FLY', type:'swf', src:'https://archive.org/download/nyan-cat-fly/NyanCatFLY.swf'},
   {id:'troll', title:'Trololo', type:'video', src:'https://archive.org/download/rainbow-trololol/Rainbow%20Trololol.mp4'},
-  {id:'aybmusic', title:'All Your Base (Gabber Robots audio)', type:'audio', src:'https://archive.org/download/invasion_of_the_gabber_rob/The%20Laziest%20Men%20on%20Mars%20-%20Invasion%20of%20the%20Gabber%20Robots.mp3'}
+  {id:'ayb', title:'All Your Base (SWF — may fail)', type:'swf', src:'https://archive.org/download/flash_allyourbase/AYB2.swf'},
+  {id:'ham', title:'Hampster Dance (SWF — may fail)', type:'swf', src:'https://archive.org/download/hamsterdance-hampster-slide_flash/Ham_Slid.swf'}
 ];
 function openFlash(startId){
   const wrap=document.createElement('div');
@@ -1917,31 +1935,22 @@ function openFlash(startId){
   stage.style.cssText='width:100%;height:360px;min-height:240px;background:#000;border:2px inset #404040;';
   wrap.appendChild(stage);
   function playMedia(url, kind){
-    stage.innerHTML='<div style="color:#0f0;padding:8px;font:12px Courier New;">fetching…</div>';
-    fetch(url).then(r=>{
-      if(!r.ok) throw new Error('http '+r.status);
-      return r.blob();
-    }).then(blob=>{
-      const obj=URL.createObjectURL(blob);
-      stage.innerHTML='';
-      if(kind==='video'){
-        const v=document.createElement('video');
-        v.controls=true; v.autoplay=true; v.src=obj;
-        v.style.cssText='width:100%;height:100%;background:#000;';
-        v.onerror=()=>{ const fr=document.createElement('iframe'); fr.src=url; fr.style.cssText='width:100%;height:100%;border:0;'; stage.innerHTML=''; stage.appendChild(fr); };
-        stage.appendChild(v);
-      } else {
-        const a=document.createElement('audio');
-        a.controls=true; a.autoplay=true; a.src=obj; a.style.cssText='width:96%;margin:24px 2%;';
-        stage.appendChild(a);
-      }
-    }).catch(()=>{
-      const fr=document.createElement('iframe');
-      fr.src=url;
-      fr.style.cssText='width:100%;height:100%;border:0;background:#000;';
-      fr.allow='autoplay';
-      stage.innerHTML=''; stage.appendChild(fr);
-    });
+    stage.innerHTML='';
+    const el=document.createElement(kind==='audio'?'audio':'video');
+    el.controls=true;
+    el.playsInline=true;
+    el.preload='auto';
+    el.src=url;
+    el.style.cssText='width:100%;height:calc(100% - 8px);background:#000;';
+    const note=document.createElement('div');
+    note.style.cssText='color:#9f9;font:11px Courier New;padding:4px;';
+    note.textContent='if this stays black, pick Limewire (works offline)';
+    el.onerror=()=>{ note.textContent='could not load — pick Limewire'; note.style.color='#f66'; };
+    el.onplaying=()=>{ note.textContent=''; };
+    stage.appendChild(el);
+    stage.appendChild(note);
+    const p=el.play();
+    if(p&&p.catch) p.catch(()=>{ note.textContent='click the player to start'; });
   }
   function loadSwf(url){
     stage.innerHTML='<div style="color:#0f0;padding:10px;font:12px Courier New;">loading flash…</div>';
@@ -1969,7 +1978,8 @@ function openFlash(startId){
           run(); return;
         }
         if(i>=sources.length){
-          stage.innerHTML='<div style="color:#fd6;padding:12px;">Flash blocked here. Try Chipmunk / Nyan / Trololo (mp4) or Limewire.</div>';
+          startPirate();
+          stage.innerHTML='<div style="color:#fd6;padding:12px;">Flash/SWF cannot run here. Playing Limewire instead. Use Chipmunk / Nyan / Trololo for video.</div>';
           return;
         }
         const s=document.createElement('script');
