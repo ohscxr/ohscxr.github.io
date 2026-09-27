@@ -240,7 +240,7 @@ Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
 <div id="desktop">
   <div class="icons">
     <div class="ico" id="icoMyComp"><div class="pic" data-ico="mycomp"></div>My Computer</div>
-    <div class="ico" id="icoAim"><div class="pic"><img class="aimoff" alt="AIM"></div>AOL Instant<br>Messenger</div>
+    <div class="ico" id="icoAim"><div class="pic" data-ico="aim"></div>AOL Instant<br>Messenger</div>
     <div class="ico" id="icoMail"><div class="pic" data-ico="mail"></div>Mailbox<br><span id="mailBadge" style="font-size:10px;"></span></div>
     <div class="ico" id="icoRecycle"><div class="pic" data-ico="recycle"></div>Recycle Bin</div>
     <div class="ico" id="icoIe"><div class="pic" data-ico="ie"></div>Internet<br>Explorer</div>
@@ -249,6 +249,8 @@ Detecting ATAPI CD-ROM        ... TOSHIBA CD-ROM XM-6201B
     <div class="ico" id="icoQuake"><div class="pic" data-ico="quake"></div>Quake<br>Shareware</div>
     <div class="ico" id="icoTheme"><div class="pic" data-ico="display"></div>Display</div>
     <div class="ico" id="icoFlash"><div class="pic" data-ico="flash"></div>Flash<br>Player</div>
+    <div class="ico" id="icoDos"><div class="pic" data-ico="pc"></div>DOSBox<br>Games</div>
+    <div class="ico" id="icoBuddies"><div class="pic" data-ico="aim"></div>Buddy<br>List</div>
   </div>
   <div id="taskbar"><div class="start">Start</div><span style="font-size:11px;color:#000;">Welcome</span><span class="clk" id="deskClock"></span></div>
 </div>
@@ -867,6 +869,9 @@ function applyPresence(rawPeers){
     const nm=p.presence.nickname;
     names.add(nm);
     if(p.presence.color && !colorLocked[nm]) peerColors[nm]=p.presence.color;
+    if(nick && !sameNick(nm,nick)){
+      peerColors[nm]=peerColors[nm]||p.presence.color;
+    }
     // drop from offline if they're here (any casing)
     for(const k of Object.keys(offlineMap)){
       if(sameNick(k,nm)) delete offlineMap[k];
@@ -1012,6 +1017,7 @@ function connectWebSocket(){
     ws.send(JSON.stringify({type:'message', text:'[[CTRL:REG]]'+nick+'|'+myUid}));
     if(bioOf(nick)) ws.send(JSON.stringify({type:'message', text:'[[CTRL:BIO]]'+bioOf(nick)}));
     if(avOf(nick)) ws.send(JSON.stringify({type:'message', text:'[[CTRL:AVATAR]]'+avOf(nick)}));
+    if(myColor) ws.send(JSON.stringify({type:'message', text:'[[CTRL:COLOR]]'+myColor}));
     document.getElementById('statusLeft').textContent = `Status: ${nick} on #0p72-1rc (connected)`;
   });
 
@@ -1131,6 +1137,47 @@ function ensureRickAudio(){
 
 
 let limeWin=null;
+
+function startNyan(){
+  const w=document.createElement('div');
+  w.style.cssText='position:fixed;z-index:90;left:'+(40+Math.random()*30)+'%;top:'+(20+Math.random()*20)+'%;width:280px;background:#000;border:2px solid #fff;box-shadow:4px 4px 0 #000;';
+  w.innerHTML='<div class="hd" style="background:linear-gradient(90deg,#ff5,#f5f,#5ff);color:#000;font:bold 12px Tahoma;padding:3px 6px;display:flex;">nyan cat<span class="x" style="margin-left:auto;cursor:pointer;">X</span></div><div style="padding:8px;text-align:center;"><div id="nyanAnim" style="font:28px monospace;color:#fcf;">=^x^=</div><div style="height:18px;background:linear-gradient(90deg,red,orange,yellow,green,blue,purple);margin-top:6px;"></div></div>';
+  document.body.appendChild(w);
+  let x=0;
+  const t=setInterval(()=>{ const a=w.querySelector('#nyanAnim'); if(!a) return; x++; a.textContent = (x%2? '~=^x^=':'-=^x^='); },200);
+  const stop=()=>{ clearInterval(t); w.remove(); };
+  w.querySelector('.x').onclick=stop;
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(); const g=ctx.createGain();
+    o.type='square'; o.frequency.value=880; g.gain.value=0.05;
+    o.connect(g); g.connect(ctx.destination); o.start();
+    setTimeout(()=>{ try{o.stop(); ctx.close();}catch(e){} },4000);
+  }catch(e){}
+  setTimeout(stop,8000);
+}
+function startNuke(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==='suspended') ctx.resume();
+    const t=ctx.currentTime;
+    const buf=ctx.createBuffer(1, ctx.sampleRate*1.2, ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++){
+      const env=Math.exp(-i/d.length*6);
+      d[i]=(Math.random()*2-1)*env*(i<200?1.4:0.7);
+    }
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=180;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+1.1);
+    src.connect(f); f.connect(g); g.connect(ctx.destination);
+    const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(20,t+0.8);
+    const g2=ctx.createGain(); g2.gain.setValueAtTime(0.4,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.9);
+    o.connect(g2); g2.connect(ctx.destination);
+    src.start(t); o.start(t); o.stop(t+1);
+  }catch(e){}
+  win95CrashRelog();
+}
 function startPirate(){
   try{ addSys('LOL LIMEWIRE'); }catch(e){}
   try{
@@ -1326,9 +1373,7 @@ function incomingMessage(m){
   if(!m) return;
   if(typeof m==='string') m={nick:'?', color:'#c0c0c0', text:m};
   const rawt=msgText(m);
-  if(/^\/pirate\b/i.test(rawt.trim()) || /^\/limewire\b/i.test(rawt.trim())) startPirate();
-  else if(/^\/kirbydance\b/i.test(rawt.trim()) || /^\/kirby\b/i.test(rawt.trim())) startKirbyDance();
-  else if(/^\/rick\b/i.test(rawt.trim())) startRickroll();
+  /* easter eggs are local to the typer — ignore incoming commands */
   const parsed=parseCtrl(rawt);
   const isCtrl=['away','back','color','reg','bio','avatar','mail'].includes(parsed.kind);
   const isDm=parsed.kind==='dm' || parsed.kind==='dm-img';
@@ -2012,6 +2057,65 @@ function openFlash(startId){
   makeApp('Macromedia Flash Player 7.0 — Early Web Catalog', 520, 0, wrap);
 }
 
+
+const DOSGAMES=[
+  {id:'pac', title:'PAC-MAN', src:'https://archive.org/embed/msdos_Pac-Man_1983'},
+  {id:'gal', title:'GALAGA', src:'https://archive.org/embed/msdos_Galaga_1984'},
+  {id:'dk', title:'DONKEY KONG', src:'https://archive.org/embed/msdos_Donkey_Kong_1983'},
+  {id:'pop', title:'PRINCE OF PERSIA', src:'https://archive.org/embed/msdos_Prince_of_Persia_1990'},
+  {id:'inv', title:'SPACE INVADERS', src:'https://archive.org/embed/msdos_Space_Invaders_1983'}
+];
+function openDos(start){
+  const wrap=document.createElement('div');
+  wrap.innerHTML='<div style="font:11px Tahoma;margin-bottom:4px;">DOSBox — click the game, then click the screen for keys</div>';
+  const sel=document.createElement('select');
+  DOSGAMES.forEach(g=>{ const o=document.createElement('option'); o.value=g.id; o.textContent=g.title; sel.appendChild(o); });
+  wrap.appendChild(sel);
+  const fr=document.createElement('iframe');
+  fr.allow='fullscreen; autoplay; gamepad';
+  fr.style.cssText='width:100%;height:360px;border:2px inset #404040;background:#000;';
+  wrap.appendChild(fr);
+  const load=id=>{
+    const g=DOSGAMES.find(x=>x.id===id)||DOSGAMES[0];
+    fr.src=g.src;
+  };
+  sel.onchange=()=>load(sel.value);
+  if(start) sel.value=start;
+  load(sel.value);
+  makeApp('MS-DOS Prompt — Games', 540, 0, wrap);
+}
+function openBuddyManager(){
+  const wrap=document.createElement('div');
+  wrap.innerHTML='<div style="font:12px Tahoma;margin-bottom:6px;">Add a Buddy</div>'
+    +'<input id="addBud" placeholder="screen name" style="width:70%">'
+    +'<button class="send" id="addBudGo">Add</button>'
+    +'<div id="budList" style="margin-top:8px;max-height:180px;overflow:auto;border:2px inset #808080;background:#fff;font:12px Courier New;"></div>';
+  function draw(){
+    const box=wrap.querySelector('#budList');
+    const names=new Set();
+    if(knownPeers) knownPeers.forEach(n=>names.add(n));
+    Object.keys(offlineMap).forEach(n=>names.add(n));
+    Object.keys(bioMap).forEach(n=>names.add(n));
+    box.innerHTML=[...names].sort((a,b)=>a.localeCompare(b)).map(n=>{
+      const on=knownPeers && [...knownPeers].some(x=>sameNick(x,n));
+      const away=isAwayNick(n);
+      const st=on?(away?'AWAY':'ONLINE'):'OFFLINE';
+      return '<div style="padding:3px 6px;">'+esc(n)+' — '+st+'</div>';
+    }).join('')||'<div style="padding:6px;color:#666;">no buddies yet</div>';
+  }
+  wrap.querySelector('#addBudGo').onclick=()=>{
+    const n=wrap.querySelector('#addBud').value.trim();
+    if(!n) return;
+    rememberBuddy(n);
+    persistBuddies();
+    refreshList();
+    draw();
+    addSys('added buddy '+n);
+  };
+  draw();
+  makeApp('Buddy List Setup', 300, 0, wrap);
+}
+
 function openThemes(){
   const wrap=document.createElement('div');
   wrap.innerHTML='<div style="font-size:12px;margin-bottom:6px;">Appearance</div>';
@@ -2083,6 +2187,8 @@ document.getElementById('icoSol').addEventListener('dblclick', openSolitaire);
 document.getElementById('icoMine').addEventListener('dblclick', openMines);
 document.getElementById('icoQuake').addEventListener('dblclick', openQuake);
 document.getElementById('icoTheme').addEventListener('dblclick', openThemes);
+document.getElementById('icoDos').addEventListener('dblclick', ()=>openDos());
+document.getElementById('icoBuddies').addEventListener('dblclick', openBuddyManager);
 document.getElementById('icoFlash').addEventListener('click', ()=>openFlash());
 document.getElementById('icoFlash').addEventListener('dblclick', ()=>openFlash());
 document.getElementById('icoMail').addEventListener('dblclick', openMailbox);
@@ -2090,10 +2196,8 @@ document.getElementById('icoMail').addEventListener('dblclick', openMailbox);
 document.querySelectorAll('[data-ico]').forEach(el=>{ el.innerHTML=svgIcon(el.getAttribute('data-ico'),32); });
 const off=document.getElementById('aimOfficial');
 document.querySelectorAll('.aimoff').forEach(img=>{ if(off) img.src=off.src; img.style.width='32px'; img.style.height='18px'; img.style.objectFit='contain'; });
-const lg=document.getElementById('aimLogo');
-if(lg){ if(off){ lg.innerHTML=''; const i=document.createElement('img'); i.src=off.src; i.style.width='28px'; i.style.height='16px'; lg.appendChild(i);} else lg.innerHTML=svgIcon('run',18); }
-const sr=document.getElementById('signRun');
-if(sr){ if(off){ sr.innerHTML=''; const i=document.createElement('img'); i.src=off.src; i.style.width='48px'; i.style.height='26px'; sr.appendChild(i);} else sr.innerHTML=svgIcon('run',28); }
+const lg=document.getElementById('aimLogo'); if(lg) lg.innerHTML=svgIcon('run',18);
+const sr=document.getElementById('signRun'); if(sr) sr.innerHTML=svgIcon('aim',28);
 
 (function rotateAds(){
   const lines=[
@@ -2323,20 +2427,30 @@ function doSend(){
     return;
   }
   if(verb==='kirbydance' || verb==='kirby' || verb==='dance'){
-    sendMessage('/kirbydance');
+    addSys('kirby (only you)');
     startKirbyDance();
     return;
   }
   if(verb==='pirate' || verb==='limewire' || verb==='lime'){
-    sendMessage('/pirate');
+    addSys('pirate (only you)');
     startPirate();
     return;
   }
   if(verb==='rick'){
-    sendMessage('/rick');
+    addSys('rick (only you)');
     startRickroll();
     rickStrikes++;
     if(rickStrikes>=3){ rickStrikes=0; win95CrashRelog(); }
+    return;
+  }
+  if(verb==='nyan'){
+    addSys('nyan (only you)');
+    startNyan();
+    return;
+  }
+  if(verb==='nuke'){
+    addSys('nuke (only you)');
+    startNuke();
     return;
   }
   if(verb==='mail' || verb==='email'){
