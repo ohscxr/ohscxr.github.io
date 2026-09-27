@@ -1140,21 +1140,21 @@ let limeWin=null;
 
 function startNyan(){
   const w=document.createElement('div');
-  w.style.cssText='position:fixed;z-index:90;left:'+(40+Math.random()*30)+'%;top:'+(20+Math.random()*20)+'%;width:280px;background:#000;border:2px solid #fff;box-shadow:4px 4px 0 #000;';
-  w.innerHTML='<div class="hd" style="background:linear-gradient(90deg,#ff5,#f5f,#5ff);color:#000;font:bold 12px Tahoma;padding:3px 6px;display:flex;">nyan cat<span class="x" style="margin-left:auto;cursor:pointer;">X</span></div><div style="padding:8px;text-align:center;"><div id="nyanAnim" style="font:28px monospace;color:#fcf;">=^x^=</div><div style="height:18px;background:linear-gradient(90deg,red,orange,yellow,green,blue,purple);margin-top:6px;"></div></div>';
+  w.style.cssText='position:fixed;z-index:90;left:18%;top:16%;width:min(420px,90vw);background:#000;border:2px solid #fff;box-shadow:4px 4px 0 #000;';
+  w.innerHTML='<div style="background:linear-gradient(90deg,#ff5,#f5f,#5ff);color:#000;font:bold 12px Tahoma;padding:3px 6px;display:flex;">nyan cat<span class="x" style="margin-left:auto;cursor:pointer;background:#c0c0c0;padding:0 4px;">X</span></div>';
+  const v=document.createElement('video');
+  v.controls=true; v.autoplay=true; v.loop=true; v.playsInline=true;
+  v.src='https://archive.org/download/nyan-archive/Nyan%20Cat%20original%20_360P.mp4';
+  v.style.cssText='width:100%;display:block;background:#000;max-height:280px;';
+  const note=document.createElement('div');
+  note.style.cssText='color:#9f9;font:11px Courier New;padding:4px;';
+  note.textContent='loading nyan-archive…';
+  v.onplaying=()=>{ note.textContent=''; };
+  v.onerror=()=>{ note.textContent='could not load archive.org video — check the network'; note.style.color='#f66'; };
+  w.appendChild(v); w.appendChild(note);
+  w.querySelector('.x').onclick=()=>{ try{v.pause();}catch(e){} w.remove(); };
   document.body.appendChild(w);
-  let x=0;
-  const t=setInterval(()=>{ const a=w.querySelector('#nyanAnim'); if(!a) return; x++; a.textContent = (x%2? '~=^x^=':'-=^x^='); },200);
-  const stop=()=>{ clearInterval(t); w.remove(); };
-  w.querySelector('.x').onclick=stop;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator(); const g=ctx.createGain();
-    o.type='square'; o.frequency.value=880; g.gain.value=0.05;
-    o.connect(g); g.connect(ctx.destination); o.start();
-    setTimeout(()=>{ try{o.stop(); ctx.close();}catch(e){} },4000);
-  }catch(e){}
-  setTimeout(stop,8000);
+  const p=v.play(); if(p&&p.catch) p.catch(()=>{ note.textContent='click the video to play'; });
 }
 function startNuke(){
   try{
