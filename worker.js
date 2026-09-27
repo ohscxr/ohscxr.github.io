@@ -18,25 +18,21 @@
 // ---------------------------------------------------------------------------
 // Race schedule / alert config
 //
-// Races run every 2 hours, all day, anchored so a race lands exactly on
-// 11:00 PM Eastern time (and therefore also on every odd Eastern hour:
-// 1am, 3am, 5am...). "Eastern time" here tracks DST automatically
-// (EDT in summer, EST in winter) so it's always really 11pm locally in
-// New York, rather than a fixed UTC-4/UTC-5 offset that would drift by an
-// hour twice a year.
+// Races run at 11pm, 3am, 5am, 7am, 9am, 11am, 1pm, 3pm, 5pm, 7pm, 9pm and
+// 11pm again, Eastern time — every 2 hours around the clock EXCEPT there's
+// no 1am race, so there's a 4-hour gap from 11pm to 3am, then normal 2-hour
+// spacing the rest of the day.
 //
-// To shift what o'clock races land on, change the "23" (hour) below.
-// To keep every race lining up with 11pm, only change RACE_INTERVAL_HOURS
-// by an amount that still evenly divides 24 (e.g. 2, 3, 4, 6, 8, 12).
+// "Eastern time" tracks DST automatically (EDT in summer, EST in winter) so
+// this is always really 11pm/3am/etc. locally in New York, not a fixed
+// UTC-4/UTC-5 offset that would drift by an hour twice a year.
+//
+// To change the schedule, edit the hours (0-23) in RACE_HOURS_LOCAL below.
 const RACE_TIMEZONE = "America/New_York";
-const RACE_INTERVAL_HOURS = 4;
-const RACE_INTERVAL_MS = RACE_INTERVAL_HOURS * 60 * 60 * 1000;
-// Wall-clock reference: 11:00 PM on this "local calendar" grid — not a real
-// UTC instant, just a fixed point to measure whole 2-hour cycles from.
-const RACE_ANCHOR_LOCAL_MS = Date.UTC(2024, 0, 1, 23, 0, 0, 0);
+const RACE_HOURS_LOCAL = [3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23];
 
 // How long before race start to post an alert, in minutes (soonest last).
-const RACE_ALERT_MINUTES = [180, 150, 120, 60, 30, 10, 5];
+const RACE_ALERT_MINUTES = [60, 30, 10, 5];
 
 // Milliseconds to ADD to a UTC timestamp to get RACE_TIMEZONE wall-clock time
 // (negative for zones west of UTC, e.g. ~-4h/-5h for America/New_York).
@@ -59,21 +55,38 @@ function tzOffsetMs(atUtcMs, timeZone) {
   return asIfUTC - atUtcMs;
 }
 
+// Converts a wall-clock date/time in `timeZone` to the real UTC instant it
+// represents (handling DST via a one-step refinement near the transition).
+function localPartsToUtc(year, month, day, hour, minute, second, timeZone) {
+  const guess = Date.UTC(year, month, day, hour, minute, second);
+  const offset1 = tzOffsetMs(guess, timeZone);
+  const t1 = guess - offset1;
+  const offset2 = tzOffsetMs(t1, timeZone);
+  return offset2 === offset1 ? t1 : guess - offset2;
+}
+
 // Returns the timestamp (ms) of the next race start strictly after `now`.
 function nextRaceStart(now) {
-  // Offset is stable across the ~2hr window we're scheduling within, except
-  // right at a DST transition (twice a year) — acceptable for a game alert.
-  const offset = tzOffsetMs(now, RACE_TIMEZONE);
-  const localNow = now + offset;
-  const sinceAnchor = localNow - RACE_ANCHOR_LOCAL_MS;
-  const cycles = Math.floor(sinceAnchor / RACE_INTERVAL_MS) + 1;
-  const localRaceStart = RACE_ANCHOR_LOCAL_MS + cycles * RACE_INTERVAL_MS;
-  return localRaceStart - offset;
+  const offsetNow = tzOffsetMs(now, RACE_TIMEZONE);
+  const local = new Date(now + offsetNow); // wall-clock pseudo-date; read with getUTC*
+  const y = local.getUTCFullYear();
+  const mo = local.getUTCMonth();
+  const d = local.getUTCDate();
+
+  const candidates = [];
+  for (const dayOffset of [0, 1]) {
+    for (const hour of RACE_HOURS_LOCAL) {
+      candidates.push(localPartsToUtc(y, mo, d + dayOffset, hour, 0, 0, RACE_TIMEZONE));
+    }
+  }
+  candidates.sort((a, b) => a - b);
+  return candidates.find((t) => t > now);
 }
 
 // Returns { time, minutesBefore, raceTime } for the next race alert that
 // should fire strictly after `now`, skipping any alerts that no longer fit
-// before the soonest upcoming race.
+// before the soonest upcoming race (races aren't evenly spaced here, so
+// each rollover re-derives the following race from the schedule directly).
 function nextRaceAlert(now) {
   let raceTime = nextRaceStart(now);
   for (let guard = 0; guard < 8; guard++) {
@@ -81,10 +94,10 @@ function nextRaceAlert(now) {
       const t = raceTime - minutesBefore * 60 * 1000;
       if (t > now) return { time: t, minutesBefore, raceTime };
     }
-    raceTime += RACE_INTERVAL_MS; // no alerts left before this race, try the next one
+    raceTime = nextRaceStart(raceTime); // no alerts left before this race, try the next one
   }
   // Should never happen, but fail safe rather than looping forever.
-  return { time: now + RACE_INTERVAL_MS, minutesBefore: RACE_ALERT_MINUTES[0], raceTime: raceTime + RACE_INTERVAL_MS };
+  return { time: now + 60 * 60 * 1000, minutesBefore: RACE_ALERT_MINUTES[0], raceTime: raceTime };
 }
 
 function formatRaceClock(ms) {
