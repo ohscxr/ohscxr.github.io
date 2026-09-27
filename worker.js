@@ -32,7 +32,7 @@ const RACE_TIMEZONE = "America/New_York";
 const RACE_HOURS_LOCAL = [3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23];
 
 // How long before race start to post an alert, in minutes (soonest last).
-const RACE_ALERT_MINUTES = [180, 120, 90, 60, 30, 10, 5];
+const RACE_ALERT_MINUTES = [60, 30, 10, 5];
 
 // Milliseconds to ADD to a UTC timestamp to get RACE_TIMEZONE wall-clock time
 // (negative for zones west of UTC, e.g. ~-4h/-5h for America/New_York).
@@ -111,7 +111,7 @@ function formatRaceClock(ms) {
 
 function raceAlertText(minutesBefore, raceTime) {
   const when = minutesBefore === 60 ? "1 hour" : minutesBefore + " minutes";
-  return `🏁 Race starts in ${when} (${formatRaceClock(raceTime)})! Get to the starting line.`;
+  return `🏁 Race starts in ${when} (${formatRaceClock(raceTime)})!`;
 }
 
 export class ChatRoom {
