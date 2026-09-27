@@ -747,26 +747,26 @@ function renderMessages(msgs){
         continue;
       }
       if(parsed.kind==='mail'){
-    if(sameNick(parsed.to,nick) && !sameNick(m.nick,nick)){
-      mailbox.push({from:m.nick,to:nick,subj:parsed.subj,body:parsed.body,ts:Date.now(),read:false});
-      saveMail();
-      addSys("You've got mail from "+m.nick);
-      youveGotMail();
-    }
-    return;
-  }
-  if(parsed.kind==='avatar'){
-    if(parsed.avatar) setAvatar(m.nick, parsed.avatar);
-    refreshList();
-    return;
-  }
-  if(parsed.kind==='bio'){
-    setBio(m.nick, parsed.bio||'');
-    saveBios();
-    addSys(m.nick+' updated their profile');
-    return;
-  }
-  if(parsed.kind==='reg'){
+        if(sameNick(parsed.to,nick) && !sameNick(m.nick,nick)){
+          mailbox.push({from:m.nick,to:nick,subj:parsed.subj,body:parsed.body,ts:Date.now(),read:false});
+          saveMail();
+          addSys("You've got mail from "+m.nick);
+          youveGotMail();
+        }
+        continue;
+      }
+      if(parsed.kind==='avatar'){
+        if(parsed.avatar) setAvatar(m.nick, parsed.avatar);
+        refreshList();
+        continue;
+      }
+      if(parsed.kind==='bio'){
+        setBio(m.nick, parsed.bio||'');
+        saveBios();
+        addSys(m.nick+' updated their profile');
+        continue;
+      }
+      if(parsed.kind==='reg'){
         if(parsed.regNick && parsed.regUid) claimNick(parsed.regNick, parsed.regUid);
         continue;
       }
