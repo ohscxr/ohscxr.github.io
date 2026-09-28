@@ -708,10 +708,18 @@ function formatBody(raw){
   return s;
 }
 
+/* Race alerts arrive with a raceTime timestamp; format it in the viewer's own timezone. */
+function localRaceText(m){
+  const mb=m.minutesBefore;
+  const when=mb===60?'1 hour':mb+' minutes';
+  const t=new Date(m.raceTime).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+  return '🏁 Race starts in '+when+' ('+t+')!';
+}
+
 function lineEl(m, extraCls){
   const d=document.createElement('div');
   d.className='line'+(extraCls?(' '+extraCls):'');
-  const parsed=parseCtrl(m.text);
+  const parsed=parseCtrl((m.raceTime && m.minutesBefore) ? localRaceText(m) : m.text);
   const col=peerColors[m.nick]||m.color||colorFor(m.nick||'')||'#c0c0c0';
   const head=`<span style="color:${esc(col)}">&lt;${esc(m.nick)}&gt;</span> `;
   if(parsed.kind==='img' || parsed.kind==='dm-img'){

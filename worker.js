@@ -153,7 +153,9 @@ export class ChatRoom {
       id: Date.now() + "-race-" + minutesBefore,
       nick: "RaceControl",
       color: "#ffcc00",
-      text: raceAlertText(minutesBefore, raceTime),
+      text: raceAlertText(minutesBefore, raceTime), // fallback for older clients
+      raceTime, // UTC ms — clients format this in the viewer's local timezone
+      minutesBefore,
       ts: Date.now(),
     };
 
