@@ -2121,18 +2121,18 @@ function llamaWhip(){
 function openWinamp(){
   llamaWhip();
   const tracks=[
-    {name:'JUNPEI — Jap-Rap Mixtape', src:'junpei_mixtape.MP3'},
-    {name:"C-Dawg's Mixtape", src:'cdawgs_mixtape.MP3'},
-    {name:'Yamz — Bassline Mixtape', src:null, el:'yamzHouse'}
+    {name:'JUNPEI — Jap-Rap Mixtape', keys:['junpei'], src:'junpei_mixtape.MP3'},
+    {name:"C-Dawg's Mixtape", keys:['cdawg','c-dawg','cdawgs'], src:'cdawgs_mixtape.MP3'},
+    {name:'Yamz — Bassline Mixtape', keys:['yamz','bassline','garage'], src:null, el:'yamzHouse'}
   ];
-  let idx=0, ctx=null, analyser=null, raf=0, srcNode=null;
+  let idx=0, ctx=null, analyser=null, raf=0, hooked=false;
   const wrap=document.createElement('div');
   wrap.style.cssText='background:#1a1a28;color:#9f9;font:11px Tahoma;padding:6px;';
   wrap.innerHTML='<div style="background:linear-gradient(#444,#111);color:#9f9;padding:3px 6px;margin-bottom:4px;font-weight:bold;">WINAMP 2.91</div>'
     +'<canvas id="waViz" width="320" height="54" style="width:100%;height:54px;background:#000;border:1px solid #333;"></canvas>'
     +'<div id="waTitle" style="color:#fc0;margin:4px 0;">stopped</div>'
     +'<div id="waTime" style="color:#8c8;">0:00 / 0:00</div>'
-    +'<audio id="waAud" style="display:none"></audio>'
+    +'<audio id="waAud"></audio>'
     +'<div style="margin:6px 0;display:flex;gap:4px;flex-wrap:wrap;">'
     +'<button class="send" id="waPrev">Prev</button>'
     +'<button class="send" id="waPlay">Play</button>'
@@ -2140,34 +2140,28 @@ function openWinamp(){
     +'<button class="send" id="waStop">Stop</button>'
     +'<button class="send" id="waNext">Next</button>'
     +'</div>'
+    +'<div style="margin:4px 0;"><button class="send" id="waLoad">Load mixtape MP3s</button> <span id="waHint" style="color:#aaa;">pick junpei_mixtape.MP3 and cdawgs_mixtape.MP3</span></div>'
+    +'<input id="waFiles" type="file" accept="audio/*,.mp3,.MP3" multiple style="display:none">'
     +'<div id="waList" style="border:1px solid #444;background:#000;max-height:140px;overflow:auto;"></div>';
   const aud=wrap.querySelector('#waAud');
   aud.loop=false;
+  aud.controls=false;
   const title=wrap.querySelector('#waTitle');
   const timeEl=wrap.querySelector('#waTime');
+  const hint=wrap.querySelector('#waHint');
   const canvas=wrap.querySelector('#waViz');
   const c=canvas.getContext('2d');
   function fmt(s){ s=Math.max(0,s||0)|0; return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
-  function house(){ return document.getElementById('yamzHouse'); }
-  function stopAll(){
-    try{ aud.pause(); aud.currentTime=0; }catch(e){}
-    const h=house(); if(h){ try{ h.pause(); h.currentTime=0; }catch(e){} }
-    title.textContent='stopped';
-  }
-  function currentEl(){
-    const t=tracks[idx];
-    return t.el ? house() : aud;
-  }
-  function hookAnalyser(media){
+  function hook(){
+    if(hooked) return;
     try{
-      ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
-      if(ctx.state==='suspended') ctx.resume();
+      ctx=new (window.AudioContext||window.webkitAudioContext)();
       analyser=ctx.createAnalyser();
       analyser.fftSize=256;
-      if(srcNode){ try{ srcNode.disconnect(); }catch(e){} }
-      srcNode=ctx.createMediaElementSource(media);
-      srcNode.connect(analyser);
+      const n=ctx.createMediaElementSource(aud);
+      n.connect(analyser);
       analyser.connect(ctx.destination);
+      hooked=true;
     }catch(e){}
   }
   function draw(){
@@ -2175,46 +2169,50 @@ function openWinamp(){
     const w=canvas.width, h=canvas.height;
     c.fillStyle='#000'; c.fillRect(0,0,w,h);
     if(!analyser) return;
-    const n=analyser.frequencyBinCount;
-    const data=new Uint8Array(n);
+    const n=analyser.frequencyBinCount, data=new Uint8Array(n);
     analyser.getByteFrequencyData(data);
     const bar=Math.max(2,(w/n)|0);
     for(let i=0;i<n;i++){
       const v=data[i]/255;
-      const bh=v*h;
-      c.fillStyle='rgb('+(80+v*175)+','+(200-v*80)+',40)';
-      c.fillRect(i*bar, h-bh, bar-1, bh);
+      c.fillStyle='rgb('+(40+v*200)+','+(220-v*90)+',30)';
+      c.fillRect(i*bar, h-v*h, bar-1, v*h);
     }
+  }
+  function stopAll(){
+    try{ aud.pause(); aud.currentTime=0; }catch(e){}
+    title.textContent='stopped';
+  }
+  function mark(){
+    [...list.children].forEach((row,j)=>row.style.background=j===idx?'#040':'#000');
+  }
+  function playCurrent(){
+    hook();
+    if(ctx && ctx.state==='suspended') ctx.resume();
+    const t=tracks[idx];
+    title.textContent=t.name;
+    mark();
+    if(t.el){
+      const h=document.getElementById(t.el);
+      if(h && h.src) aud.src=h.src;
+    } else if(t.blob){
+      aud.src=t.blob;
+    } else if(t.src){
+      aud.src=t.src;
+    } else {
+      title.textContent=t.name+' — load the MP3';
+      return;
+    }
+    aud.loop=false;
+    const p=aud.play();
+    if(p&&p.catch) p.catch(()=>{
+      title.textContent=t.name+' — click Load mixtape MP3s';
+      hint.textContent='browser blocked the file path; use Load mixtape MP3s';
+    });
   }
   function load(i, auto){
     idx=(i+tracks.length)%tracks.length;
-    const t=tracks[idx];
-    title.textContent=t.name;
-    const h=house();
-    if(h){ try{ h.pause(); }catch(e){} }
-    try{ aud.pause(); }catch(e){}
-    if(t.el){
-      if(h){
-        h.loop=false;
-        if(!h._waHook){ hookAnalyser(h); h._waHook=1; }
-        if(auto) h.play().catch(()=>{});
-      }
-    } else {
-      aud.loop=false;
-      aud.src=t.src;
-      if(!aud._waHook){ hookAnalyser(aud); aud._waHook=1; }
-      if(auto) aud.play().catch(()=>{ title.textContent=t.name+' — file missing next to index.html'; });
-    }
-    [...list.children].forEach((row,j)=>row.style.background=j===idx?'#040':'#000');
-  }
-  function play(){
-    const el=currentEl();
-    if(!el || !el.src && !(tracks[idx].el && house())) load(idx,true);
-    else el.play().catch(()=>{});
-    title.textContent=tracks[idx].name;
-  }
-  function pause(){
-    try{ currentEl()&&currentEl().pause(); }catch(e){}
+    if(auto!==false) playCurrent();
+    else { title.textContent=tracks[idx].name; mark(); }
   }
   const list=wrap.querySelector('#waList');
   tracks.forEach((t,i)=>{
@@ -2224,21 +2222,35 @@ function openWinamp(){
     row.onclick=()=>load(i,true);
     list.appendChild(row);
   });
-  wrap.querySelector('#waPlay').onclick=play;
-  wrap.querySelector('#waPause').onclick=pause;
+  wrap.querySelector('#waPlay').onclick=()=>{ if(!aud.src) playCurrent(); else aud.play().catch(()=>{}); };
+  wrap.querySelector('#waPause').onclick=()=>aud.pause();
   wrap.querySelector('#waStop').onclick=stopAll;
   wrap.querySelector('#waPrev').onclick=()=>load(idx-1,true);
   wrap.querySelector('#waNext').onclick=()=>load(idx+1,true);
+  wrap.querySelector('#waLoad').onclick=()=>wrap.querySelector('#waFiles').click();
+  wrap.querySelector('#waFiles').onchange=e=>{
+    const files=[...e.target.files];
+    files.forEach(f=>{
+      const low=f.name.toLowerCase();
+      const t=tracks.find(x=>x.keys && x.keys.some(k=>low.includes(k))) || tracks.find(x=>!x.el && !x.blob && x!==tracks[2]);
+      if(!t || t.el) return;
+      if(t.blob) URL.revokeObjectURL(t.blob);
+      t.blob=URL.createObjectURL(f);
+      t.fileName=f.name;
+    });
+    hint.textContent=tracks.filter(t=>t.blob).map(t=>t.fileName).join(', ')||'no match — name files junpei / cdawgs';
+    playCurrent();
+  };
   aud.addEventListener('timeupdate', ()=>{ timeEl.textContent=fmt(aud.currentTime)+' / '+fmt(aud.duration); });
   aud.addEventListener('ended', ()=>{ title.textContent=tracks[idx].name+' — ended'; });
-  const box=makeApp('Winamp', 360, 0, wrap);
+  const box=makeApp('Winamp', 380, 0, wrap);
   const closer=box.querySelector('.x');
-  const old=closer.onclick;
+  const oldc=closer.onclick;
   closer.onclick=()=>{
     cancelAnimationFrame(raf);
     stopAll();
-    if(old) old();
-    else box.remove();
+    tracks.forEach(t=>{ if(t.blob) URL.revokeObjectURL(t.blob); });
+    if(oldc) oldc(); else box.remove();
   };
   draw();
 }
