@@ -1,28 +1,28 @@
-name: Deploy Cloudflare Worker
+name: Deploy chat worker
 
-# Runs whenever worker.js or wrangler.toml change on main.
-# Adjust the paths/branch below if your setup differs.
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
-      - "worker.js"
-      - "wrangler.toml"
-  workflow_dispatch: {}
+      - worker.js
+      - wrangler.toml
+      - .github/workflows/deploy-worker.yml
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Deploy with Wrangler
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # Required: this token is an Account API Token (cfat_ prefix),
-          # which can't be auto-detected via /memberships like a user
-          # token can — the account ID must be supplied explicitly.
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Names listed here are read from `env:` below and uploaded to the
+          # Worker as secrets (same as `wrangler secret put`).
+          secrets: |
+            FIVEMANAGE_API_KEY
+        env:
+          FIVEMANAGE_API_KEY: ${{ secrets.FIVEMANAGE_API_KEY }}
