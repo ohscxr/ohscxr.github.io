@@ -257,8 +257,98 @@ export class ChatRoom {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Image uploads (FiveManage)
+//
+// Chat messages are capped at 500 characters, so pictures can't travel through
+// the WebSocket. Instead the browser uploads the image straight to FiveManage
+// and only the resulting URL (~80 chars) is sent as a chat message.
+//
+// To do that without shipping the FiveManage API token to every visitor, the
+// browser calls GET /upload-url on this Worker. The Worker uses the secret
+// token to ask FiveManage for a short-lived presigned upload URL and returns
+// it. The browser then POSTs the file to that URL.
+//
+// Setup:
+//   wrangler secret put FIVEMANAGE_API_KEY     # paste your FiveManage API token
+//   (optional) set ALLOWED_ORIGINS in wrangler.toml, e.g.
+//     ALLOWED_ORIGINS = "https://your-site.pages.dev,https://yourdomain.com"
+const FIVEMANAGE_PRESIGN_ENDPOINT = "https://api.fivemanage.com/api/v3/file/presigned-url";
+const PRESIGN_TTL_SECONDS = 300; // the browser uploads immediately, so keep this short
+
+function uploadCorsHeaders(request, env) {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = String(env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const headers = {
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+  if (allowed.length === 0) {
+    headers["Access-Control-Allow-Origin"] = "*"; // no allowlist configured
+  } else if (allowed.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  return { headers, originAllowed: allowed.length === 0 || allowed.includes(origin) };
+}
+
+function jsonResponse(body, status, extraHeaders) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...extraHeaders },
+  });
+}
+
+async function handleUploadUrl(request, env) {
+  const { headers: cors, originAllowed } = uploadCorsHeaders(request, env);
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  if (request.method !== "GET") {
+    return jsonResponse({ error: "Method not allowed" }, 405, cors);
+  }
+  if (!originAllowed) {
+    return jsonResponse({ error: "Origin not allowed" }, 403, cors);
+  }
+  if (!env.FIVEMANAGE_API_KEY) {
+    return jsonResponse({ error: "Uploads are not configured on the server" }, 503, cors);
+  }
+
+  const expiresAt = Math.floor(Date.now() / 1000) + PRESIGN_TTL_SECONDS;
+  let res;
+  try {
+    res = await fetch(`${FIVEMANAGE_PRESIGN_ENDPOINT}?expiresAt=${expiresAt}`, {
+      headers: { Authorization: env.FIVEMANAGE_API_KEY },
+    });
+  } catch (e) {
+    return jsonResponse({ error: "Could not reach FiveManage" }, 502, cors);
+  }
+
+  const payload = await res.json().catch(() => null);
+  const presignedUrl = payload && payload.data && payload.data.presignedUrl;
+  if (!res.ok || !presignedUrl) {
+    // Don't leak upstream details (or the token) to the browser; log them instead.
+    console.error("FiveManage presign failed", res.status, JSON.stringify(payload));
+    return jsonResponse({ error: "Could not create an upload URL" }, 502, cors);
+  }
+
+  return jsonResponse({ presignedUrl }, 200, cors);
+}
+
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/upload-url") {
+      return handleUploadUrl(request, env);
+    }
+
     // A single named Durable Object instance = a single shared chat room.
     // (Use a different name, or derive one from the URL, if you want
     // multiple independent rooms.)

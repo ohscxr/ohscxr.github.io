@@ -730,6 +730,7 @@ function lineEl(m, extraCls){
       img.className='chatimg';
       img.alt='picture';
       img.src=src;
+      if(/^https?:/i.test(src)){ img.style.cursor='zoom-in'; img.title='Click to open full size'; img.addEventListener('click', ()=>window.open(src,'_blank','noopener')); }
       img.addEventListener('error', ()=>{
         img.remove();
         const f=document.createElement('span');
@@ -1011,6 +1012,8 @@ function renderMembers(peers){
 // the placeholder below with your Worker's URL, e.g.
 //   const WORKER_WS_URL = "wss://mirc-chat-worker.YOUR-SUBDOMAIN.workers.dev/ws";
 const WORKER_WS_URL = "wss://mirc-chat-worker.scarishawt.workers.dev/ws";
+// Picture uploads: the Worker hands out short-lived FiveManage upload URLs here.
+const UPLOAD_URL_ENDPOINT = WORKER_WS_URL.replace(/^wss:/i,'https:').replace(/^ws:/i,'http:').replace(/\/ws\/?$/,'/upload-url');
 
 let ws = null;
 let wsReady = false;
@@ -1604,40 +1607,79 @@ function isGoodImgSrc(src){
   return b64.length>=80 && b64.length%4===0;
 }
 
-function resizeImageFile(file){
-  return new Promise((resolve,reject)=>{
+/* ---- Picture upload -------------------------------------------------------
+   Messages are limited to 500 chars server-side, so pictures are uploaded to
+   FiveManage and only the resulting https URL is sent as "[[CTRL:IMG]]<url>".
+   The API token never reaches the browser: the Worker's /upload-url endpoint
+   returns a short-lived presigned URL that we POST the file to.            */
+const IMG_MAX_UPLOAD_BYTES   = 10*1024*1024; // refuse anything larger than this
+const IMG_DOWNSCALE_OVER     = 2*1024*1024;  // re-encode photos bigger than this...
+const IMG_MAX_SIDE           = 1600;         // ...or wider/taller than this (px)
+const IMG_EXT = {'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp'};
+let imgUploading = false;
+
+// Shrinks big photos before upload. GIFs are sent untouched (a canvas would
+// flatten the animation). If anything goes wrong the original file is used.
+function prepareImageFile(file){
+  if(file.type==='image/gif') return Promise.resolve(file);
+  return new Promise(resolve=>{
     const url=URL.createObjectURL(file);
     const im=new Image();
     im.onload=()=>{
       URL.revokeObjectURL(url);
-      let max=120;
-      const tryEnc=(maxSide,q)=>{
-        let w=im.width, h=im.height;
-        if(w>maxSide || h>maxSide){ const s=maxSide/Math.max(w,h); w=Math.max(1,Math.round(w*s)); h=Math.max(1,Math.round(h*s)); }
-        const c=document.createElement('canvas');
-        c.width=w; c.height=h;
-        const ctx=c.getContext('2d');
-        ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
-        ctx.drawImage(im,0,0,w,h);
-        return c.toDataURL('image/jpeg',q);
-      };
-      let data=tryEnc(120,0.45);
-      if(data.length>12000) data=tryEnc(96,0.35);
-      if(data.length>12000) data=tryEnc(72,0.3);
-      if(data.length>12000) data=tryEnc(56,0.25);
-      resolve(data);
+      const longSide=Math.max(im.width, im.height);
+      if(longSide<=IMG_MAX_SIDE && file.size<=IMG_DOWNSCALE_OVER){ resolve(file); return; }
+      const s=Math.min(1, IMG_MAX_SIDE/longSide);
+      const w=Math.max(1,Math.round(im.width*s)), h=Math.max(1,Math.round(im.height*s));
+      const c=document.createElement('canvas');
+      c.width=w; c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(im,0,0,w,h);
+      c.toBlob(b=>resolve(b && b.size<file.size ? b : file), 'image/jpeg', 0.85);
     };
-    im.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    im.onerror=()=>{ URL.revokeObjectURL(url); resolve(file); };
     im.src=url;
   });
 }
 
+async function uploadToFiveManage(blob){
+  // 1) ask our Worker for a presigned upload URL
+  const r1=await fetch(UPLOAD_URL_ENDPOINT);
+  const j1=await r1.json().catch(()=>({}));
+  if(!r1.ok || !j1.presignedUrl) throw new Error(j1.error || 'could not get an upload URL');
+  // 2) upload straight to FiveManage
+  const fd=new FormData();
+  fd.append('file', blob, 'picture.'+(IMG_EXT[blob.type]||'jpg'));
+  const r2=await fetch(j1.presignedUrl, {method:'POST', body:fd});
+  const j2=await r2.json().catch(()=>({}));
+  const url=j2 && j2.data && j2.data.url;
+  if(!r2.ok || !url) throw new Error((j2 && j2.error) || 'upload failed');
+  if(!/^https:\/\/\S+$/i.test(url)) throw new Error('unexpected upload response');
+  return url;
+}
+
 async function sendPickedImage(file){
+  if(imgUploading){ addSys('a picture is already uploading'); return; }
+  if(!file.type || file.type.indexOf('image/')!==0){ addSys('that file is not a picture'); return; }
+  if(!(ws && wsReady)){ addSys('not connected — picture not sent'); return; }
+  imgUploading=true;
+  addSys('uploading picture…');
   try{
-    const data=await resizeImageFile(file);
-    sendMessage('[[CTRL:IMG]]'+data);
+    const blob=await prepareImageFile(file);
+    if(blob.size>IMG_MAX_UPLOAD_BYTES){
+      addSys('picture is too big (max '+Math.round(IMG_MAX_UPLOAD_BYTES/1048576)+' MB)');
+      return;
+    }
+    const url=await uploadToFiveManage(blob);
+    const text='[[CTRL:IMG]]'+url;
+    if(text.length>500) throw new Error('picture link too long');
+    sendMessage(text);
   }catch(e){
-    addSys('could not send picture');
+    console.error('picture upload failed', e);
+    addSys('could not send picture: '+((e && e.message) || 'upload failed'));
+  }finally{
+    imgUploading=false;
   }
 }
 

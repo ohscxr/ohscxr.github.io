@@ -9,3 +9,11 @@ class_name = "ChatRoom"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
+
+# Image uploads use a FiveManage API token stored as a secret (never put it here):
+#   wrangler secret put FIVEMANAGE_API_KEY
+[vars]
+# Comma-separated list of site origins allowed to request upload URLs.
+# Leave empty to allow any origin. Example:
+# ALLOWED_ORIGINS = "https://your-site.pages.dev,https://yourdomain.com"
+ALLOWED_ORIGINS = ""
