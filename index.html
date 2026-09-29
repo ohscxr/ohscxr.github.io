@@ -716,6 +716,44 @@ function localRaceText(m){
   return '🏁 Race starts in '+when+' ('+t+')!';
 }
 
+/* Image links: any https URL ending in a picture extension (query string allowed)
+   is shown inline. Trailing punctuation like "." or ")" is not part of the link. */
+const IMG_URL_RE=/https:\/\/[^\s<>"']+/gi;
+const IMG_EXT_RE=/\.(png|jpe?g|gif|webp|avif|bmp)(\?[^\s]*)?(#[^\s]*)?$/i;
+function imageUrlsIn(text){
+  const out=[];
+  for(const u0 of String(text||'').match(IMG_URL_RE)||[]){
+    const u=u0.replace(/[.,;:!?)\]]+$/,'');
+    if(IMG_EXT_RE.test(u) && !out.includes(u)) out.push(u);
+  }
+  return out;
+}
+
+function makeChatImg(src, d){
+  const img=document.createElement('img');
+  img.className='chatimg';
+  img.alt='picture';
+  img.referrerPolicy='no-referrer';
+  img.src=src;
+  if(/^https?:/i.test(src)){
+    img.style.cursor='zoom-in';
+    img.title='Click to open full size';
+    img.addEventListener('click', ()=>window.open(src,'_blank','noopener'));
+  }
+  img.addEventListener('load', ()=>{
+    const p=d.parentElement;   // keep the chat pinned to the bottom if it was there
+    if(p && p.scrollHeight-p.scrollTop-p.clientHeight<250) p.scrollTop=p.scrollHeight;
+  });
+  img.addEventListener('error', ()=>{
+    img.remove();
+    const f=document.createElement('span');
+    f.className='imgfail';
+    f.textContent=' [image did not load]';
+    d.appendChild(f);
+  });
+  return img;
+}
+
 function lineEl(m, extraCls){
   const d=document.createElement('div');
   d.className='line'+(extraCls?(' '+extraCls):'');
@@ -726,25 +764,19 @@ function lineEl(m, extraCls){
     const src=parsed.img||'';
     if(isGoodImgSrc(src)){
       d.innerHTML=head+'<span style="color:#808080">sent a picture:</span>';
-      const img=document.createElement('img');
-      img.className='chatimg';
-      img.alt='picture';
-      img.src=src;
-      if(/^https?:/i.test(src)){ img.style.cursor='zoom-in'; img.title='Click to open full size'; img.addEventListener('click', ()=>window.open(src,'_blank','noopener')); }
-      img.addEventListener('error', ()=>{
-        img.remove();
-        const f=document.createElement('span');
-        f.className='imgfail';
-        f.textContent=' [image did not load]';
-        d.appendChild(f);
-      });
-      d.appendChild(img);
+      d.appendChild(makeChatImg(src,d));
     } else {
       d.innerHTML=head+'<span style="color:#808080">(picture — too large or blocked)</span>';
     }
     return {el:d, parsed};
   }
-  d.innerHTML=head+`<span style="color:#c0c0c0">${formatBody(parsed.text)}</span>`;
+  const imgs=imageUrlsIn(parsed.text);
+  if(imgs.length===1 && parsed.text.trim()===imgs[0]){
+    d.innerHTML=head+'<span style="color:#808080">sent a picture:</span>';   // message is only the link
+  } else {
+    d.innerHTML=head+`<span style="color:#c0c0c0">${formatBody(parsed.text)}</span>`;
+  }
+  for(const u of imgs.slice(0,3)) d.appendChild(makeChatImg(u,d));
   return {el:d, parsed};
 }
 
