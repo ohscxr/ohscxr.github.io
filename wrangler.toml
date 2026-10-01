@@ -17,3 +17,7 @@ new_sqlite_classes = ["ChatRoom"]
 # Leave empty to allow any origin. Example:
 # ALLOWED_ORIGINS = "https://your-site.pages.dev,https://yourdomain.com"
 ALLOWED_ORIGINS = ""
+
+# Discord "who's online" embed uses a webhook URL stored as a secret:
+#   wrangler secret put DISCORD_WEBHOOK_URL
+# (Discord: Channel settings > Integrations > Webhooks > New Webhook > Copy URL)

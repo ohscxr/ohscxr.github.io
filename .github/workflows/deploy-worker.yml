@@ -24,5 +24,7 @@ jobs:
           # Worker as secrets (same as `wrangler secret put`).
           secrets: |
             FIVEMANAGE_API_KEY
+            DISCORD_WEBHOOK_URL
         env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           FIVEMANAGE_API_KEY: ${{ secrets.FIVEMANAGE_API_KEY }}

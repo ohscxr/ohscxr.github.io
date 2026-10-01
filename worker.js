@@ -114,16 +114,55 @@ function raceAlertText(minutesBefore, raceTime) {
   return `🏁 Race starts in ${when} (${formatRaceClock(raceTime)})!`;
 }
 
+// ---------------------------------------------------------------------------
+// Discord "who's online" embed
+//
+// A single Discord message (posted via webhook) is kept up to date with the
+// list of nicknames currently connected to the chat. The first update POSTs
+// the message and remembers its ID; every later update EDITS that same message
+// so the channel doesn't fill up with roster spam.
+//
+// Setup:
+//   wrangler secret put DISCORD_WEBHOOK_URL
+//   (paste the full webhook URL: Channel settings > Integrations > Webhooks)
+//
+// If you ever delete the Discord message, the next update notices (404) and
+// posts a fresh one automatically.
+const DISCORD_DEBOUNCE_MS = 3000; // batch rapid joins/leaves; Discord rate-limits webhooks
+const DISCORD_EMBED_TITLE = "💬 IRC — Who's Online";
+
+// Stop nicknames from becoming Discord formatting or mentions.
+function escapeDiscord(s) {
+  return String(s).replace(/([\\*_~`|>@#:\[\]()])/g, "\\$1");
+}
+
+function buildRosterEmbed(nicks) {
+  const count = nicks.length;
+  return {
+    title: DISCORD_EMBED_TITLE,
+    description: count
+      ? nicks.map((n) => "🟢 " + escapeDiscord(n)).join("\n")
+      : "*Nobody is in the chat right now.*",
+    color: count ? 0x57f287 : 0x747f8d,
+    footer: { text: count + (count === 1 ? " user" : " users") + " online" },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 export class ChatRoom {
   constructor(state, env) {
     this.state = state;
     this.env = env;
     this.sessions = new Map(); // WebSocket -> { nickname, color }
     this.messages = [];
+    this.discordMessageId = null;
+    this.discordTimer = null;
+    this.lastDiscordKey = null;
 
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get("messages");
       this.messages = stored || [];
+      this.discordMessageId = (await this.state.storage.get("discordMessageId")) || null;
 
       // Only (re)schedule if nothing is already pending — the alarm and its
       // pending-alert record persist in storage across DO restarts/evictions.
@@ -132,6 +171,73 @@ export class ChatRoom {
         await this.scheduleNextRaceAlarm();
       }
     });
+
+    // After a restart/deploy no one is connected yet, so this clears any stale
+    // roster; clients reconnect and re-join moments later.
+    this.scheduleDiscordUpdate();
+  }
+
+  // Queue a roster refresh. If one is already queued it will read the latest
+  // state when it fires, so extra calls are free.
+  scheduleDiscordUpdate(delayMs = DISCORD_DEBOUNCE_MS) {
+    if (!this.env.DISCORD_WEBHOOK_URL || this.discordTimer) return;
+    this.discordTimer = setTimeout(() => {
+      this.discordTimer = null;
+      this.updateDiscordRoster().catch((e) => console.error("Discord update failed", e));
+    }, delayMs);
+  }
+
+  async updateDiscordRoster() {
+    const base = String(this.env.DISCORD_WEBHOOK_URL).replace(/\/+$/, "");
+
+    const nicks = [
+      ...new Set(
+        [...this.sessions.values()].filter((s) => s.nickname).map((s) => s.nickname)
+      ),
+    ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    const key = nicks.join("\n");
+    if (key === this.lastDiscordKey) return; // nothing changed since last push
+
+    const body = JSON.stringify({
+      embeds: [buildRosterEmbed(nicks)],
+      allowed_mentions: { parse: [] }, // never ping anyone
+    });
+    const send = (method, url) =>
+      fetch(url, { method, headers: { "Content-Type": "application/json" }, body });
+
+    let res = null;
+
+    // Try editing the existing message first.
+    if (this.discordMessageId) {
+      res = await send("PATCH", `${base}/messages/${this.discordMessageId}`);
+      if (res.status === 404) {
+        // Message was deleted in Discord; fall through and post a new one.
+        this.discordMessageId = null;
+        await this.state.storage.delete("discordMessageId");
+      }
+    }
+
+    // Otherwise post a fresh message (wait=true so Discord returns its ID).
+    if (!this.discordMessageId) {
+      res = await send("POST", `${base}?wait=true`);
+      if (res.ok) {
+        const msg = await res.json().catch(() => null);
+        if (msg && msg.id) {
+          this.discordMessageId = msg.id;
+          await this.state.storage.put("discordMessageId", msg.id);
+        }
+      }
+    }
+
+    if (res && res.ok) {
+      this.lastDiscordKey = key;
+    } else if (res && res.status === 429) {
+      const info = await res.json().catch(() => null);
+      this.scheduleDiscordUpdate(Math.ceil(((info && info.retry_after) || 5) * 1000) + 250);
+    } else if (res) {
+      console.error("Discord webhook failed", res.status, await res.text().catch(() => ""));
+    }
   }
 
   async scheduleNextRaceAlarm() {
@@ -254,6 +360,7 @@ export class ChatRoom {
       }
     }
     this.broadcast({ type: "presence", peers });
+    this.scheduleDiscordUpdate();
   }
 }
 
